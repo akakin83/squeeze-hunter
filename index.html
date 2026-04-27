@@ -1,0 +1,2962 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Funding Squeeze Hunter v3.5</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #07090d;
+    --panel: #0e131c;
+    --panel-2: #0a0f17;
+    --border: #1a2332;
+    --border-2: #243042;
+    --text: #c5d0e0;
+    --text-mute: #6b7785;
+    --text-dim: #424d5d;
+    --accent: #ffb547;
+    --pos: #4ade80;
+    --neg: #f87171;
+    --info: #60a5fa;
+    --strong: #facc15;
+  }
+  body {
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 12px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+  .container { max-width: 1500px; margin: 0 auto; padding: 14px; }
+
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  h1 { font-size: 14px; font-weight: 600; letter-spacing: 0.18em; color: #e8eef7; }
+  .subtitle { font-size: 10px; color: var(--text-mute); margin-top: 3px; letter-spacing: 0.06em; }
+  .status-row { display: flex; gap: 18px; align-items: center; font-size: 10px; letter-spacing: 0.04em; flex-wrap: wrap; }
+  .status-item { display: flex; align-items: center; gap: 6px; color: var(--text-mute); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; background: var(--text-dim); }
+  .dot.green { background: var(--pos); box-shadow: 0 0 5px var(--pos); }
+  .dot.amber { background: var(--accent); }
+  .dot.red { background: var(--neg); }
+  .settlement-warn { color: var(--accent); font-weight: 600; display: none; }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 0;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .tab {
+    flex: 1; padding: 12px 16px;
+    background: transparent;
+    border: none;
+    color: var(--text-mute);
+    font-family: inherit;
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    font-weight: 600;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tab:hover { color: var(--text); background: var(--panel-2); }
+  .tab.active { color: #e8eef7; border-bottom-color: var(--strong); background: var(--panel-2); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 12px;
+    overflow: hidden;
+  }
+  .panel-head {
+    padding: 9px 16px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+    user-select: none;
+  }
+  .panel-title { font-size: 10px; font-weight: 700; letter-spacing: 0.18em; color: #9ca8b8; }
+  .panel-meta { font-size: 10px; color: var(--text-mute); }
+  .panel-body { padding: 0; }
+  .panel-body.padded { padding: 12px 16px; }
+
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    text-align: left; padding: 8px 12px;
+    background: var(--panel-2); color: var(--text-mute);
+    font-size: 9px; font-weight: 600; letter-spacing: 0.14em;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; white-space: nowrap;
+  }
+  th.right, td.right { text-align: right; }
+  th.center, td.center { text-align: center; }
+  td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  tbody tr:hover td { background: var(--panel-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  .symbol-cell { font-weight: 600; color: #e8eef7; letter-spacing: 0.04em; }
+
+  .badge {
+    display: inline-block; padding: 2px 7px;
+    border-radius: 2px;
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+    border: 1px solid transparent;
+  }
+  .badge-short { background: rgba(248,113,113,0.1); color: var(--neg); border-color: rgba(248,113,113,0.3); }
+  .badge-long { background: rgba(74,222,128,0.1); color: var(--pos); border-color: rgba(74,222,128,0.3); }
+  .badge-fired {
+    background: rgba(250,204,21,0.15); color: var(--strong);
+    border-color: rgba(250,204,21,0.4);
+    animation: blink 1.4s infinite;
+  }
+  @keyframes blink { 50% { opacity: 0.55; } }
+
+  /* Score badge */
+  .score {
+    display: inline-block; padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 11px; font-weight: 700;
+    min-width: 38px; text-align: center;
+  }
+  .score-low { background: rgba(107,119,133,0.15); color: var(--text-mute); }
+  .score-mid { background: rgba(96,165,250,0.15); color: var(--info); }
+  .score-high { background: rgba(255,181,71,0.15); color: var(--accent); }
+  .score-elite { background: rgba(250,204,21,0.2); color: var(--strong); border: 1px solid rgba(250,204,21,0.4); }
+
+  .v-pos { color: var(--pos); }
+  .v-neg { color: var(--neg); }
+  .v-mute { color: var(--text-mute); }
+  .v-strong { color: var(--strong); font-weight: 600; }
+  .v-dim { color: var(--text-dim); }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 10px;
+  }
+  .setting { display: flex; flex-direction: column; gap: 4px; }
+  .setting label { font-size: 9px; color: var(--text-mute); letter-spacing: 0.08em; }
+  .setting input, .setting select {
+    background: var(--bg);
+    border: 1px solid var(--border-2);
+    color: var(--text);
+    padding: 6px 8px;
+    border-radius: 3px;
+    font-family: inherit;
+    font-size: 12px;
+  }
+  .setting input:focus, .setting select:focus { outline: 1px solid var(--info); border-color: var(--info); }
+
+  #log {
+    background: var(--bg);
+    padding: 10px 14px;
+    font-size: 11px;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+  .log-entry { padding: 2px 0; color: var(--text-mute); }
+  .log-entry.signal { color: var(--strong); font-weight: 600; }
+  .log-entry.error { color: var(--neg); }
+  .log-entry.info { color: var(--info); }
+  .log-time { color: var(--text-dim); margin-right: 8px; }
+
+  .empty { text-align: center; padding: 28px; color: var(--text-dim); font-size: 11px; letter-spacing: 0.08em; }
+
+  .toggle {
+    cursor: pointer; color: var(--text-mute);
+    font-size: 10px; letter-spacing: 0.08em;
+    background: none; border: none;
+    font-family: inherit;
+  }
+  .toggle:hover { color: var(--text); }
+  .collapsed .panel-body { display: none; }
+
+  .disclaimer {
+    font-size: 10px; color: var(--text-dim);
+    text-align: center; padding: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  .ratio-bar {
+    display: inline-flex;
+    width: 60px; height: 4px;
+    background: var(--border); border-radius: 2px;
+    overflow: hidden; vertical-align: middle;
+    margin-left: 6px;
+  }
+  .ratio-bar > span { display: block; height: 100%; }
+
+  /* Backtest specific */
+  .btn {
+    background: rgba(250,204,21,0.1);
+    color: var(--strong);
+    border: 1px solid rgba(250,204,21,0.3);
+    padding: 8px 18px;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    transition: background 0.15s;
+  }
+  .btn:hover:not(:disabled) { background: rgba(250,204,21,0.18); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  .progress {
+    width: 100%; height: 4px;
+    background: var(--border);
+    border-radius: 2px; overflow: hidden;
+    margin: 12px 0;
+  }
+  .progress-bar {
+    height: 100%; background: var(--strong);
+    transition: width 0.2s ease;
+    width: 0%;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .stat {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 12px;
+    border-radius: 3px;
+  }
+  .stat-label {
+    font-size: 9px;
+    color: var(--text-mute);
+    letter-spacing: 0.12em;
+    margin-bottom: 5px;
+  }
+  .stat-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: #e8eef7;
+  }
+  .stat-sub {
+    font-size: 10px;
+    color: var(--text-mute);
+    margin-top: 2px;
+  }
+
+  #equity-canvas {
+    width: 100%;
+    height: 280px;
+    display: block;
+    background: var(--panel-2);
+  }
+
+  .score-buckets {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+    gap: 8px;
+    padding: 14px 16px;
+  }
+  .bucket {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    padding: 10px;
+    border-radius: 3px;
+    text-align: center;
+  }
+  .bucket-label { font-size: 9px; color: var(--text-mute); letter-spacing: 0.1em; margin-bottom: 5px; }
+  .bucket-rate { font-size: 16px; font-weight: 700; }
+  .bucket-count { font-size: 9px; color: var(--text-mute); margin-top: 2px; }
+
+  @media (max-width: 768px) {
+    header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .status-row { gap: 12px; }
+    th, td { padding: 6px 8px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div>
+      <h1>FUNDING SQUEEZE HUNTER</h1>
+      <div class="subtitle">v3.5 · OI 5분 가속도 (선행) · CVD · 청산 · BTC 무관</div>
+    </div>
+    <div class="status-row">
+      <span class="status-item"><span class="dot" id="ws-dot"></span><span id="ws-status">대기</span></span>
+      <span class="status-item"><span class="dot" id="poll-dot"></span><span id="poll-status">대기</span></span>
+      <span class="status-item" id="rate-limit-status" title="Binance API weight 사용량 (한도 2400/분)"><span class="dot" id="rate-dot"></span><span id="rate-text">⚡ —</span></span>
+      <span class="settlement-warn" id="settlement-warn">⚠ 정산창 차단</span>
+      <span class="status-item"><span id="last-update">—</span></span>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab active" data-tab="live">▶ 라이브 스캐너</button>
+    <button class="tab" data-tab="backtest">▼ 백테스트</button>
+  </div>
+
+  <!-- ============================ LIVE TAB ============================ -->
+  <div class="tab-content active" id="tab-live">
+    <div class="panel" id="panel-settings">
+      <div class="panel-head" onclick="togglePanel('panel-settings')">
+        <span class="panel-title">▼ 설정 (THRESHOLDS)</span>
+        <span class="panel-meta">로컬 저장됨</span>
+      </div>
+      <div class="panel-body padded">
+        <div class="settings-grid" id="settings-grid"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">■ 화약고 후보 (LAYER 1+2 통과)</span>
+        <span class="panel-meta" id="gunpowder-count">—</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>SYMBOL</th>
+              <th>방향</th>
+              <th class="center">점수</th>
+              <th class="right">KST일변동</th>
+              <th class="right">OI 5m ⚡</th>
+              <th class="right">펀딩</th>
+              <th class="right">OI 1h / 4h</th>
+              <th class="center">OI 궤적</th>
+              <th class="center">큰손</th>
+              <th class="center">CVD</th>
+              <th class="center">청산</th>
+              <th class="right">테이커</th>
+              <th class="right">스파이크</th>
+              <th class="center">추세</th>
+              <th class="center">레짐</th>
+              <th class="center">공간</th>
+            </tr>
+          </thead>
+          <tbody id="gunpowder-body">
+            <tr><td colspan="16" class="empty">데이터 로딩 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">🔥 발화 시그널 (LAYER 3)</span>
+        <span class="panel-meta" id="signals-count">—</span>
+      </div>
+      <div class="panel-body">
+        <table>
+          <thead>
+            <tr>
+              <th>시각</th>
+              <th>SYMBOL</th>
+              <th>방향</th>
+              <th class="center">점수</th>
+              <th class="right">펀딩</th>
+              <th class="right">테이커</th>
+              <th class="right">스파이크</th>
+            </tr>
+          </thead>
+          <tbody id="signals-body">
+            <tr><td colspan="7" class="empty">발화 없음 (대기 중)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-log">
+      <div class="panel-head" onclick="togglePanel('panel-log')">
+        <span class="panel-title">▼ 이벤트 로그</span>
+        <button class="toggle" onclick="event.stopPropagation(); clearLog()">CLEAR</button>
+      </div>
+      <div class="panel-body">
+        <div id="log"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================ BACKTEST TAB ============================ -->
+  <div class="tab-content" id="tab-backtest">
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-title">⚙ 백테스트 설정</span>
+        <span class="panel-meta">현재 라이브 임계값 사용</span>
+      </div>
+      <div class="panel-body padded">
+        <div class="settings-grid">
+          <div class="setting">
+            <label>SYMBOL</label>
+            <input type="text" id="bt-symbol" value="SOLUSDT" placeholder="예: SOLUSDT">
+          </div>
+          <div class="setting">
+            <label>기간 (일, 최대 30)</label>
+            <input type="number" id="bt-days" value="30" min="3" max="30">
+          </div>
+          <div class="setting">
+            <label>익절 (%)</label>
+            <input type="number" id="bt-tp" value="2.0" step="0.1" min="0.1">
+          </div>
+          <div class="setting">
+            <label>손절 (%)</label>
+            <input type="number" id="bt-sl" value="0.8" step="0.1" min="0.1">
+          </div>
+          <div class="setting">
+            <label>시간손절 (분)</label>
+            <input type="number" id="bt-time" value="60" min="5">
+          </div>
+          <div class="setting">
+            <label>수수료+슬리피지 (%, RT)</label>
+            <input type="number" id="bt-fee" value="0.12" step="0.01" min="0">
+          </div>
+          <div class="setting">
+            <label>최소 점수 필터</label>
+            <input type="number" id="bt-minscore" value="0" min="0" max="100">
+          </div>
+        </div>
+        <div style="margin-top: 14px; display: flex; gap: 10px; align-items: center;">
+          <button class="btn" id="bt-run">백테스트 실행</button>
+          <span class="panel-meta" id="bt-progress-text">대기</span>
+        </div>
+        <div class="progress" id="bt-progress" style="display:none;"><div class="progress-bar" id="bt-bar"></div></div>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-results-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ 통계 요약</span>
+        <span class="panel-meta" id="bt-summary-meta">—</span>
+      </div>
+      <div class="panel-body">
+        <div class="stats-grid" id="bt-stats"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-buckets-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ 점수 구간별 승률 (점수 시스템 검증)</span>
+        <span class="panel-meta">구간별 PnL 차이가 있어야 점수가 의미 있음</span>
+      </div>
+      <div class="panel-body">
+        <div class="score-buckets" id="bt-buckets"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-oitraj-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ OI 궤적별 승률 (궤적 분석 검증)</span>
+        <span class="panel-meta">건강누적이 둔화/회복보다 유의미하게 좋아야 함</span>
+      </div>
+      <div class="panel-body">
+        <div class="score-buckets" id="bt-oitraj"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-lsr-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ 큰손 LSR별 승률 (LSR 검증)</span>
+        <span class="panel-meta">확증/일치가 함정/반대보다 좋아야 함</span>
+      </div>
+      <div class="panel-body">
+        <div class="score-buckets" id="bt-lsr"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-equity-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ 누적 수익 곡선 (수수료 차감)</span>
+        <span class="panel-meta">수직선 = 트레이드 시점</span>
+      </div>
+      <div class="panel-body">
+        <canvas id="equity-canvas"></canvas>
+      </div>
+    </div>
+
+    <div class="panel" id="bt-trades-panel" style="display:none;">
+      <div class="panel-head">
+        <span class="panel-title">■ 트레이드 상세</span>
+        <span class="panel-meta" id="bt-trades-meta">—</span>
+      </div>
+      <div class="panel-body">
+        <div style="max-height: 500px; overflow-y: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>시각 (UTC)</th>
+                <th>방향</th>
+                <th class="center">점수</th>
+                <th class="right">진입</th>
+                <th class="right">청산</th>
+                <th class="right">PnL</th>
+                <th>사유</th>
+                <th class="right">소요</th>
+                <th class="right">펀딩</th>
+              </tr>
+            </thead>
+            <tbody id="bt-trades-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    Binance Futures USDS-M 직접 수신 · 백엔드 없음 · 투자 권유 아님 · 백테스트는 과거 성과이며 미래 보장 아님
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ============================================================================
+// 설정
+// ============================================================================
+const DEFAULT_CONFIG = {
+  fundingAbsThreshold: 0.0005,
+  oiGrowthThreshold: 0.25,
+  volume24hMin: 50_000_000,
+  priceChange24hMaxAbs: 0.05,
+  takerRatioThreshold: 0.65,
+  volumeSpikeRatio: 2.5,
+  fundingZThreshold: 2.0,
+  settlementBlockMinutes: 15,
+  pollIntervalMs: 60_000,
+  evalIntervalMs: 1500,
+  takerWindowMs: 5 * 60 * 1000,
+  cooldownMs: 6 * 60 * 60 * 1000,
+  minSignalScore: 50,
+  // v3
+  trendFilterEnabled: true,
+  trendPenalty: 15,
+  regimeFilterEnabled: true,
+  adxStrongThreshold: 35,
+  adxModerateThreshold: 25,
+  regimePenalty: 10,
+  spaceFilterEnabled: true,
+  spaceMinMultiple: 1.5,
+  spacePenalty: 10,
+  defaultTpForSpaceCheck: 0.02,
+  // v3.2 신규: OI 궤적
+  oiTrajectoryEnabled: true,
+  oiPeakThreshold: 0.95,         // 24h 고점 95% 이상 = 정점 위험
+  oiTrajectoryPeakPenalty: 15,   // 정점 페널티
+  oiTrajectorySlowPenalty: 10,   // 둔화 페널티
+  oiTrajectoryRecoveryPenalty: 8,// 회복 페널티
+  oiPeakHardBlock: true,         // 정점은 하드 차단
+  // v3.2 신규: 롱숏 비율
+  lsrEnabled: true,
+  lsrPollHours: 1,
+  lsrTrapPenalty: 12,
+  lsrConfirmBonus: 5,
+  // v3.4 신규: 평가 윈도우 단축 (A)
+  takerWindowFastMs: 60 * 1000,        // 1분 윈도우 (5분 → 1분)
+  volSpikeWindowMs: 60 * 1000,         // 1분 거래량 스파이크
+  // v3.4 신규: CVD 추세 (E)
+  cvdEnabled: true,
+  cvdWindowMs: 30 * 60 * 1000,         // CVD 30분 윈도우
+  cvdDivPenalty: 8,                    // CVD 다이버전스 페널티
+  cvdConfirmBonus: 5,                  // CVD 확증 보너스
+  // v3.4 신규: 청산 스트림 (F)
+  liquidationEnabled: true,
+  liquidationWindowMs: 60 * 1000,      // 최근 1분 청산 카운트
+  liquidationCascadeBonus: 8,          // 캐스케이드 발생 보너스
+  liquidationCascadeUSD: 100_000,      // 캐스케이드 임계값 ($100k+)
+  // v3.4 신규: Rate Limit 보호
+  rateLimitWarnPercent: 50,
+  rateLimitSlowPercent: 80,
+  rateLimitPausePercent: 95,
+  // v3.5 신규: OI 5분 가속도 (선행 신호)
+  oi5mEnabled: true,
+  oi5mSurgeThreshold: 0.05,        // 5% 이상 = 급증
+  oi5mDropThreshold: -0.05,        // -5% 이하 = 급감
+  oi5mSurgeAlignedBonus: 5,        // 급증 + 진입방향 일치 (가속도)
+  oi5mDropAlignedBonus: 3,         // 급감 + 진입방향 일치 (반대진영 청산)
+  oi5mDropOpposedPenalty: 10,      // 급감 + 진입방향 불일치 (이미 늦음)
+};
+
+let CONFIG = loadConfig();
+function loadConfig() {
+  try {
+    const saved = localStorage.getItem('fsh-config-v3.5');
+    if (saved) return { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+  } catch {}
+  return { ...DEFAULT_CONFIG };
+}
+function saveConfig() {
+  try { localStorage.setItem('fsh-config-v3.5', JSON.stringify(CONFIG)); } catch {}
+}
+
+// ============================================================================
+// 점수 시스템 (0~100, v3 페널티 포함)
+// ============================================================================
+function computeScore(m) {
+  // m: { funding, oiGrowth, takerRatio, volSpike, fundingZ,
+  //      trendAligned, adx, trendDir, spaceMultiple, direction }
+  let s = { funding: 0, oi: 0, oi4h: 0, taker: 0, vol: 0, z: 0,
+            trendPenalty: 0, regimePenalty: 0, spacePenalty: 0,
+            oiTrajPenalty: 0, lsrPenalty: 0, lsrBonus: 0,
+            cvdPenalty: 0, cvdBonus: 0, liquidationBonus: 0,
+            oi5mBonus: 0, oi5mPenalty: 0,
+            base: 0, total: 0,
+            trendNote: '', regimeNote: '', spaceNote: '',
+            oiTrajNote: '', lsrNote: '', cvdNote: '', liqNote: '', oi5mNote: '' };
+
+  // 펀딩 강도 (0~25)
+  const fAbs = Math.abs(m.funding);
+  const fT = CONFIG.fundingAbsThreshold;
+  if (fAbs >= fT * 3) s.funding = 25;
+  else if (fAbs >= fT * 2) s.funding = 20;
+  else if (fAbs >= fT) s.funding = 10 + ((fAbs - fT) / fT) * 10;
+
+  // OI 1h 증가 (0~13)
+  if (m.oiGrowth !== null && m.oiGrowth !== undefined && m.oiGrowth > 0) {
+    const oT = CONFIG.oiGrowthThreshold;
+    if (m.oiGrowth >= oT * 2) s.oi = 13;
+    else if (m.oiGrowth >= oT) s.oi = 7 + ((m.oiGrowth - oT) / oT) * 6;
+  }
+
+  // OI 4h 증가 (0~7) - 트렌드 강도
+  s.oi4h = 0;
+  if (m.oiGrowth4h !== null && m.oiGrowth4h !== undefined && m.oiGrowth4h > 0) {
+    // 4h는 1h보다 임계값 더 빡세게: oiGrowthThreshold * 1.5
+    const oT4 = CONFIG.oiGrowthThreshold * 1.5;
+    if (m.oiGrowth4h >= oT4 * 2) s.oi4h = 7;
+    else if (m.oiGrowth4h >= oT4) s.oi4h = 4 + ((m.oiGrowth4h - oT4) / oT4) * 3;
+    else if (m.oiGrowth4h > 0) s.oi4h = (m.oiGrowth4h / oT4) * 4;
+  }
+
+  // 테이커 비율 (0~25)
+  const tT = CONFIG.takerRatioThreshold;
+  if (m.takerRatio !== null && m.takerRatio !== undefined) {
+    if (m.takerRatio >= 0.85) s.taker = 25;
+    else if (m.takerRatio >= 0.75) s.taker = 20;
+    else if (m.takerRatio >= tT) s.taker = 10 + ((m.takerRatio - tT) / Math.max(0.001, 0.75 - tT)) * 10;
+  }
+
+  // 거래량 스파이크 (0~20)
+  if (m.volSpike !== null && m.volSpike !== undefined && m.volSpike > 0) {
+    const vT = CONFIG.volumeSpikeRatio;
+    if (m.volSpike >= vT * 2) s.vol = 20;
+    else if (m.volSpike >= vT) s.vol = 10 + ((m.volSpike - vT) / vT) * 10;
+  }
+
+  // 펀딩 z-score 보너스 (0~10)
+  if (m.fundingZ !== null && m.fundingZ !== undefined) {
+    const zAbs = Math.abs(m.fundingZ);
+    if (zAbs >= 3) s.z = 10;
+    else if (zAbs >= 2) s.z = 5 + (zAbs - 2) * 5;
+  }
+
+  s.base = s.funding + s.oi + s.oi4h + s.taker + s.vol + s.z;
+
+  // ===== v3 페널티 =====
+
+  // D. 추세 정렬 페널티
+  if (CONFIG.trendFilterEnabled && m.trendAligned !== undefined && m.trendAligned !== null) {
+    if (m.trendAligned === false) {
+      s.trendPenalty = -CONFIG.trendPenalty;
+      s.trendNote = '역행';
+    } else {
+      s.trendNote = '정렬';
+    }
+  }
+
+  // F. 레짐 페널티 (ADX)
+  if (CONFIG.regimeFilterEnabled && m.adx !== undefined && m.adx !== null) {
+    if (m.adx >= CONFIG.adxStrongThreshold) {
+      // 강추세: 추세 일치 시 면제, 역행 시 큰 페널티
+      if (m.trendAligned === false) {
+        s.regimePenalty = -CONFIG.regimePenalty * 2;
+        s.regimeNote = `강추세역행(${m.adx.toFixed(0)})`;
+      } else if (m.trendAligned === true) {
+        s.regimeNote = `강추세동행(${m.adx.toFixed(0)})`;
+      } else {
+        s.regimePenalty = -CONFIG.regimePenalty;
+        s.regimeNote = `강추세(${m.adx.toFixed(0)})`;
+      }
+    } else if (m.adx >= CONFIG.adxModerateThreshold) {
+      if (m.trendAligned !== true) {
+        s.regimePenalty = -CONFIG.regimePenalty;
+        s.regimeNote = `약추세(${m.adx.toFixed(0)})`;
+      } else {
+        s.regimeNote = `약추세동행(${m.adx.toFixed(0)})`;
+      }
+    } else {
+      s.regimeNote = `횡보(${m.adx.toFixed(0)})`;
+    }
+  }
+
+  // E'. 공간 거리 페널티
+  if (CONFIG.spaceFilterEnabled && m.spaceMultiple !== undefined && m.spaceMultiple !== null) {
+    if (m.spaceMultiple < CONFIG.spaceMinMultiple) {
+      s.spacePenalty = -CONFIG.spacePenalty;
+      s.spaceNote = `좁음(${m.spaceMultiple.toFixed(1)}x)`;
+    } else {
+      s.spaceNote = `${m.spaceMultiple.toFixed(1)}x`;
+    }
+  }
+
+  // v3.2: OI 궤적 페널티
+  if (CONFIG.oiTrajectoryEnabled && m.oiTrajectory && m.oiTrajectory.class !== 'unknown') {
+    s.oiTrajNote = m.oiTrajectory.label;
+    switch (m.oiTrajectory.class) {
+      case 'peak':
+        s.oiTrajPenalty = -CONFIG.oiTrajectoryPeakPenalty;
+        break;
+      case 'slowing':
+        s.oiTrajPenalty = -CONFIG.oiTrajectorySlowPenalty;
+        break;
+      case 'recovery':
+        s.oiTrajPenalty = -CONFIG.oiTrajectoryRecoveryPenalty;
+        break;
+      case 'healthy':
+      case 'sideways':
+      default:
+        s.oiTrajPenalty = 0;
+    }
+  }
+
+  // v3.2: LSR (큰손) 페널티/보너스
+  if (CONFIG.lsrEnabled && m.lsr && m.lsr.class !== 'unknown') {
+    s.lsrNote = m.lsr.label;
+    switch (m.lsr.class) {
+      case 'trap':
+        s.lsrPenalty = -CONFIG.lsrTrapPenalty;
+        break;
+      case 'confirm':
+        s.lsrBonus = CONFIG.lsrConfirmBonus;
+        break;
+      default:
+        s.lsrPenalty = 0;
+        s.lsrBonus = 0;
+    }
+  }
+
+  // v3.4: CVD 페널티/보너스
+  if (CONFIG.cvdEnabled && m.cvd && m.cvd.class !== 'unknown') {
+    s.cvdNote = m.cvd.label;
+    switch (m.cvd.class) {
+      case 'confirm':
+      case 'divergence':  // 다이버전스도 진입 방향 신호로 봄
+        s.cvdBonus = CONFIG.cvdConfirmBonus;
+        break;
+      case 'weak':
+        s.cvdPenalty = -CONFIG.cvdDivPenalty;
+        break;
+      default:
+        s.cvdPenalty = 0;
+        s.cvdBonus = 0;
+    }
+  }
+
+  // v3.4: 청산 캐스케이드 보너스
+  if (CONFIG.liquidationEnabled && m.liquidation && m.liquidation.class === 'cascade') {
+    s.liquidationBonus = CONFIG.liquidationCascadeBonus;
+    s.liqNote = m.liquidation.label;
+  } else if (m.liquidation && m.liquidation.class !== 'none' && m.liquidation.class !== 'disabled') {
+    s.liqNote = m.liquidation.label;
+  }
+
+  // v3.5: OI 5분 가속도
+  if (CONFIG.oi5mEnabled && m.oi5m && m.oi5m.class !== 'unknown' && m.oi5m.class !== 'disabled') {
+    s.oi5mNote = m.oi5m.label;
+    // 급증: 신규 자금 유입 (방향 일치 시 가속 보너스)
+    // 진입 방향이 long이면 펀딩 음수 (숏 과밀) - OI 급증 = 새 포지션 진입 = 가속
+    if (m.oi5m.class === 'surge') {
+      s.oi5mBonus = CONFIG.oi5mSurgeAlignedBonus;
+    }
+    // 급감: 청산 진행 중
+    else if (m.oi5m.class === 'drop') {
+      // direction이 long이면 펀딩 음수, 즉 숏 과밀 상태
+      // OI 급감 = 숏 청산이거나 롱 익절
+      // 가격이 오르면서 OI 감소 = 숏 청산 (진입 방향에 유리)
+      // 가격이 내리면서 OI 감소 = 롱 청산 (진입 방향에 위험)
+      // priceDir 이 같이 있으면 더 정확하지만, 단순화: 청산 자체는 캐스케이드 시그널
+      // priceDir 정보가 없으면 일단 작은 보너스만
+      if (m.priceMove !== undefined && m.priceMove !== null) {
+        // priceMove > 0이고 direction long = 좋음 (숏 청산)
+        // priceMove < 0이고 direction long = 위험 (롱 청산, 늦은 진입)
+        const aligned = (m.direction === 'long' && m.priceMove > 0) ||
+                        (m.direction === 'short' && m.priceMove < 0);
+        if (aligned) {
+          s.oi5mBonus = CONFIG.oi5mDropAlignedBonus;
+        } else {
+          s.oi5mPenalty = -CONFIG.oi5mDropOpposedPenalty;
+        }
+      } else {
+        // priceMove 없으면 보수적: 작은 보너스만 (캐스케이드 가능성)
+        s.oi5mBonus = Math.floor(CONFIG.oi5mDropAlignedBonus / 2);
+      }
+    }
+  }
+
+  s.total = Math.max(0, Math.round(
+    s.base + s.trendPenalty + s.regimePenalty + s.spacePenalty +
+    s.oiTrajPenalty + s.lsrPenalty + s.lsrBonus +
+    s.cvdPenalty + s.cvdBonus + s.liquidationBonus +
+    s.oi5mBonus + s.oi5mPenalty
+  ));
+  return s;
+}
+
+// ============================================================================
+// 상태
+// ============================================================================
+const state = {
+  symbols: [],
+  ticker24h: new Map(),
+  funding: new Map(),
+  fundingHistory: new Map(),
+  oiHistory: new Map(),
+  gunpowder: new Map(),
+  aggTrade: new Map(),
+  signals: [],
+  log: [],
+  ws: null,
+  wsSubscribed: new Set(),
+  reconnectTimer: null,
+  // v3
+  klines1h: new Map(),
+  klines5m: new Map(),
+  klines1hLastFetch: new Map(),
+  // v3.2: LSR
+  lsrHistory: new Map(),
+  lsrLastFetch: new Map(),
+  // v3.4: 청산 스트림
+  liquidationStream: null,
+  liquidations: new Map(),     // symbol → [{ts, side, qty, price, value}]
+  // v3.4: Rate Limit 모니터
+  rateLimit: {
+    weight: 0,
+    weightLimit: 2400,
+    weightUpdated: 0,
+    paused: false,
+    pausedUntil: 0,
+    lastError: null,
+  },
+};
+
+// ============================================================================
+// API
+// ============================================================================
+const API_BASE = 'https://fapi.binance.com';
+const WS_BASE = 'wss://fstream.binance.com/stream';
+
+async function fetchJSON(url) {
+  // Rate limit 일시정지 중이면 거부
+  if (state.rateLimit.paused && Date.now() < state.rateLimit.pausedUntil) {
+    throw new Error(`Rate limit 일시정지 중 (${Math.ceil((state.rateLimit.pausedUntil - Date.now())/1000)}초 남음)`);
+  }
+  const res = await fetch(url);
+  // weight 헤더 추적
+  const weightHeader = res.headers.get('x-mbx-used-weight-1m');
+  if (weightHeader) {
+    state.rateLimit.weight = parseInt(weightHeader);
+    state.rateLimit.weightUpdated = Date.now();
+  }
+  // 429/418 처리
+  if (res.status === 418 || res.status === 429) {
+    const retryAfter = parseInt(res.headers.get('retry-after') || '60');
+    state.rateLimit.paused = true;
+    state.rateLimit.pausedUntil = Date.now() + (retryAfter * 1000);
+    state.rateLimit.lastError = `HTTP ${res.status} - ${retryAfter}초 차단`;
+    log('error', `🛑 ${state.rateLimit.lastError}. 자동 일시정지`);
+    throw new Error(`HTTP ${res.status} (Retry-After: ${retryAfter}s)`);
+  }
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function loadExchangeInfo() {
+  const data = await fetchJSON(`${API_BASE}/fapi/v1/exchangeInfo`);
+  state.symbols = data.symbols
+    .filter(s => s.status === 'TRADING' && s.contractType === 'PERPETUAL' && s.quoteAsset === 'USDT')
+    .map(s => s.symbol);
+  log('info', `종목 ${state.symbols.length}개 로드`);
+}
+
+async function pollFunding() {
+  const data = await fetchJSON(`${API_BASE}/fapi/v1/premiumIndex`);
+  const now = Date.now();
+  data.forEach(d => {
+    const rate = parseFloat(d.lastFundingRate);
+    if (isNaN(rate)) return;
+    state.funding.set(d.symbol, rate);
+    if (!state.fundingHistory.has(d.symbol)) state.fundingHistory.set(d.symbol, []);
+    const hist = state.fundingHistory.get(d.symbol);
+    // 중복 방지: 마지막 값과 다를 때만 추가
+    if (hist.length === 0 || hist[hist.length-1].rate !== rate) {
+      hist.push({ ts: now, rate });
+    }
+    while (hist.length > 0 && now - hist[0].ts > 7*24*60*60*1000) hist.shift();
+  });
+}
+
+async function pollTicker24h() {
+  const data = await fetchJSON(`${API_BASE}/fapi/v1/ticker/24hr`);
+  data.forEach(d => {
+    state.ticker24h.set(d.symbol, {
+      volume: parseFloat(d.quoteVolume),
+      priceChangePercent: parseFloat(d.priceChangePercent) / 100,
+      lastPrice: parseFloat(d.lastPrice),
+    });
+  });
+}
+
+async function pollOIForSymbol(symbol) {
+  try {
+    const data = await fetchJSON(`${API_BASE}/fapi/v1/openInterest?symbol=${symbol}`);
+    const oi = parseFloat(data.openInterest);
+    const ticker = state.ticker24h.get(symbol);
+    if (!ticker) return;
+    const oiUsd = oi * ticker.lastPrice;
+    if (!state.oiHistory.has(symbol)) state.oiHistory.set(symbol, []);
+    const hist = state.oiHistory.get(symbol);
+    hist.push({ ts: Date.now(), oi: oiUsd });
+    while (hist.length > 0 && Date.now() - hist[0].ts > 26*60*60*1000) hist.shift();
+  } catch {}
+}
+
+async function bootstrapOIHistory(symbol) {
+  try {
+    // 24시간 데이터 (5m * 288 = 24h) - 1h, 4h 계산 위해 충분히 확보
+    const data = await fetchJSON(
+      `${API_BASE}/futures/data/openInterestHist?symbol=${symbol}&period=5m&limit=288`
+    );
+    const hist = data.map(d => ({
+      ts: parseInt(d.timestamp),
+      oi: parseFloat(d.sumOpenInterestValue),
+    })).filter(h => !isNaN(h.oi) && h.oi > 0);
+    if (hist.length > 0) state.oiHistory.set(symbol, hist);
+  } catch {}
+}
+
+// ============================================================================
+// 라이브 시그널 로직
+// ============================================================================
+function getOIGrowth(symbol, lookbackMs) {
+  const hist = state.oiHistory.get(symbol);
+  if (!hist || hist.length < 2) return null;
+  const now = Date.now();
+  const target = now - lookbackMs;
+  // 허용 오차: lookback의 25% 또는 15분 중 큰 것
+  const tolerance = Math.max(15 * 60 * 1000, lookbackMs * 0.25);
+  let oldest = null;
+  for (const h of hist) {
+    if (h.ts <= target + tolerance) {
+      if (!oldest || Math.abs(h.ts - target) < Math.abs(oldest.ts - target)) oldest = h;
+    }
+  }
+  if (!oldest || oldest.oi === 0) return null;
+  const cur = hist[hist.length - 1];
+  return (cur.oi - oldest.oi) / oldest.oi;
+}
+
+function getOIGrowth1h(symbol) { return getOIGrowth(symbol, 60 * 60 * 1000); }
+function getOIGrowth4h(symbol) { return getOIGrowth(symbol, 4 * 60 * 60 * 1000); }
+// v3.5: 직전 5분 변화율 (선행 가속도)
+function getOIGrowth5m(symbol) { return getOIGrowth(symbol, 5 * 60 * 1000); }
+
+// v3.5: OI 5분 가속도 분류
+// v3.5: 직전 5분 가격 변화율 (OI 5m drop 분류 보조)
+function getPriceMove5m(symbol, currentPrice) {
+  const klines = state.klines5m.get(symbol);
+  if (!klines || klines.length < 2 || !currentPrice) return null;
+  // 가장 최근 봉 = 직전 5분
+  const last = klines[klines.length - 1];
+  if (!last || last.open === 0) return null;
+  return (currentPrice - last.open) / last.open;
+}
+
+function classifyOI5m(symbol, direction) {
+  if (!CONFIG.oi5mEnabled) return { class: 'disabled', label: '비활성', value: null };
+  const change = getOIGrowth5m(symbol);
+  if (change === null) return { class: 'unknown', label: '데이터부족', value: null };
+  
+  // 급증: +5% 이상
+  if (change >= CONFIG.oi5mSurgeThreshold) {
+    // 진입 방향과 일치 = 자금이 같은 방향으로 진입 중
+    // (펀딩 음수 = 롱 진입 후보 → 숏 청산되면 OI 감소, 신규 롱 진입이면 OI 증가)
+    // OI 증가 = 신규 포지션 진입. 방향성 자체는 OI만으로 판단 어려움.
+    // 하지만 "진입 직후 가격 움직임"의 선행 신호로는 유효
+    return { class: 'surge', label: `급증 +${(change*100).toFixed(1)}%`, value: change };
+  }
+  // 급감: -5% 이하
+  if (change <= CONFIG.oi5mDropThreshold) {
+    // OI 급감 = 청산/익절 진행 중
+    // 진입 방향과 일치 = 반대 진영이 털리는 중 = 좋음
+    // 진입 방향과 불일치 = 우리 쪽이 털리는 중 = 진입 위험
+    return { class: 'drop', label: `급감 ${(change*100).toFixed(1)}%`, value: change };
+  }
+  // 평범
+  return { class: 'normal', label: `${(change*100).toFixed(1)}%`, value: change };
+}
+
+function getFundingZ(symbol) {
+  const hist = state.fundingHistory.get(symbol);
+  if (!hist || hist.length < 5) return null;
+  const rates = hist.map(h => h.rate);
+  const earlier = rates.slice(0, -1);
+  const mean = earlier.reduce((a,b)=>a+b,0) / earlier.length;
+  const variance = earlier.reduce((a,b)=>a+(b-mean)**2,0) / earlier.length;
+  const std = Math.sqrt(variance);
+  if (std === 0) return null;
+  return (rates[rates.length-1] - mean) / std;
+}
+
+function isInSettlementWindow(ts) {
+  const t = ts ? new Date(ts) : new Date();
+  const totalMin = t.getUTCHours() * 60 + t.getUTCMinutes();
+  const settlements = [0, 480, 960];
+  for (const s of settlements) {
+    const diff = Math.min(
+      Math.abs(totalMin - s),
+      Math.abs(totalMin - s - 1440),
+      Math.abs(totalMin - s + 1440)
+    );
+    if (diff < CONFIG.settlementBlockMinutes) return true;
+  }
+  return false;
+}
+
+function evaluateLayer1(symbol) {
+  const funding = state.funding.get(symbol);
+  const ticker = state.ticker24h.get(symbol);
+  if (funding === undefined || !ticker) return null;
+  if (Math.abs(funding) <= CONFIG.fundingAbsThreshold) return null;
+  if (ticker.volume <= CONFIG.volume24hMin) return null;
+  if (Math.abs(ticker.priceChangePercent) >= CONFIG.priceChange24hMaxAbs) return null;
+  return {
+    direction: funding < 0 ? 'long' : 'short',
+    funding,
+    volume: ticker.volume,
+    priceChange: ticker.priceChangePercent,
+    lastPrice: ticker.lastPrice,
+  };
+}
+
+function evaluateLayer2(symbol, l1) {
+  const oiGrowth = getOIGrowth1h(symbol);
+  const oiGrowth4h = getOIGrowth4h(symbol);
+  const fundingZ = getFundingZ(symbol);
+  const oiPass = oiGrowth !== null && oiGrowth > CONFIG.oiGrowthThreshold;
+  const zPass = fundingZ !== null && Math.abs(fundingZ) > CONFIG.fundingZThreshold;
+  if (!oiPass && !zPass) return null;
+  return { ...l1, oiGrowth, oiGrowth4h, fundingZ };
+}
+
+// ============================================================================
+// v3.2: OI 궤적 분류 (5단계)
+// ============================================================================
+function classifyOITrajectory(symbol) {
+  const hist = state.oiHistory.get(symbol);
+  if (!hist || hist.length < 12) {  // 최소 1시간 데이터 (5m * 12)
+    return { class: 'unknown', label: '데이터부족', peakRatio: null, accel: null, vsHigh: null };
+  }
+
+  const cur = hist[hist.length - 1];
+  const now = cur.ts;
+
+  // 24시간 (또는 가능한 만큼) 최대값 대비 현재 위치
+  const cutoff24h = now - 24*60*60*1000;
+  const recent = hist.filter(h => h.ts >= cutoff24h);
+  if (recent.length < 5) {
+    return { class: 'unknown', label: '데이터부족', peakRatio: null, accel: null, vsHigh: null };
+  }
+  const maxItem = recent.reduce((a, b) => b.oi > a.oi ? b : a, recent[0]);
+  const minItem = recent.reduce((a, b) => b.oi < a.oi ? b : a, recent[0]);
+  const maxOI = maxItem.oi;
+  const minOI = minItem.oi;
+  const peakRatio = maxOI > 0 ? cur.oi / maxOI : null;
+  // 정점이 얼마나 과거인가? 0이면 지금이 최대값 (아직 상승 중)
+  const peakAgeMs = now - maxItem.ts;
+
+  // 가속도: 구간별 증가율 비교 (15분, 30분, 45분 전 값 직접 조회)
+  function getOIAt(deltaMs) {
+    const target = now - deltaMs;
+    let best = null;
+    for (const h of hist) {
+      if (h.ts <= target + 7*60*1000 && h.ts >= target - 7*60*1000) {
+        if (!best || Math.abs(h.ts - target) < Math.abs(best.ts - target)) best = h;
+      }
+    }
+    return best;
+  }
+  const oi0 = cur.oi;
+  const oi15 = getOIAt(15*60*1000);
+  const oi30 = getOIAt(30*60*1000);
+  const oi45 = getOIAt(45*60*1000);
+  // 최근 15분 동안의 증가율 (oi15 → oi0)
+  const recentRate = (oi15 && oi15.oi > 0) ? (oi0 - oi15.oi) / oi15.oi : null;
+  // 그 이전 15분 동안의 증가율 (oi30 → oi15)
+  const priorRate = (oi30 && oi15 && oi30.oi > 0) ? (oi15.oi - oi30.oi) / oi30.oi : null;
+  // 더 이전 15분 (oi45 → oi30)
+  const olderRate = (oi45 && oi30 && oi45.oi > 0) ? (oi30.oi - oi45.oi) / oi45.oi : null;
+
+  // 5단계 분류
+  let cls = 'unknown', label = '미정';
+
+  // 1. 정점 위험: 24h 최대값의 95% 이상 + 정점이 15분 이상 전 (즉, 더 이상 상승 안 함)
+  const oiGrowth1h = getOIGrowth1h(symbol);
+  if (peakRatio !== null && peakRatio >= CONFIG.oiPeakThreshold && peakAgeMs >= 15*60*1000) {
+    cls = 'peak'; label = '정점';
+  }
+  // 2. 1시간 동안 음수: 청산 진행 중
+  else if (oiGrowth1h !== null && oiGrowth1h < -0.05) {
+    cls = 'peak'; label = '청산중';
+  }
+  // 3. 회복: 24h 최저값에서 30% 이상 회복했는데 최대값의 70% 미만
+  else if (peakRatio !== null && peakRatio < 0.70 && minOI > 0 && (cur.oi / minOI - 1) > 0.15) {
+    cls = 'recovery'; label = '회복';
+  }
+  // 4. 둔화: 양수 증가지만 가속도 명확히 감소
+  // (최근 15분 증가율이 직전 15분의 50% 이하 + 절대값도 작음)
+  else if (recentRate !== null && priorRate !== null &&
+           oiGrowth1h !== null && oiGrowth1h > 0 &&
+           priorRate > 0.005 &&  // 직전엔 그래도 의미있는 증가가 있었음
+           recentRate < priorRate * 0.5 &&
+           recentRate < 0.003) {
+    cls = 'slowing'; label = '둔화';
+  }
+  // 5. 건강 누적: 현재 의미있게 증가 중
+  else if (oiGrowth1h !== null && oiGrowth1h > CONFIG.oiGrowthThreshold * 0.5) {
+    cls = 'healthy'; label = '건강누적';
+  }
+  else {
+    cls = 'sideways'; label = '횡보';
+  }
+
+  return {
+    class: cls, label,
+    peakRatio,
+    accel: (recentRate !== null && priorRate !== null) ? (recentRate - priorRate) : null,
+    vsHigh: peakRatio,
+  };
+}
+
+// ============================================================================
+// v3.2: 큰손 롱숏 비율 (LSR)
+// ============================================================================
+async function fetchLSR(symbol) {
+  // /futures/data/topLongShortPositionRatio: 큰손 포지션 비율
+  // 1시간 단위로 폴링 (rate limit 보호)
+  const last = state.lsrLastFetch.get(symbol) || 0;
+  if (Date.now() - last < CONFIG.lsrPollHours * 60 * 60 * 1000 / 4) return;  // 15분마다 한번 OK
+  state.lsrLastFetch.set(symbol, Date.now());
+
+  try {
+    // 5분 간격 데이터, 최근 12개 = 1시간
+    const url = `${API_BASE}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=5m&limit=24`;
+    const data = await fetchJSON(url);
+    if (!Array.isArray(data) || data.length === 0) return;
+    const hist = data.map(d => ({
+      ts: parseInt(d.timestamp),
+      longRatio: parseFloat(d.longAccount),
+      shortRatio: parseFloat(d.shortAccount),
+      ratio: parseFloat(d.longShortRatio),
+    })).filter(d => !isNaN(d.ratio) && d.ratio > 0);
+    if (hist.length > 0) state.lsrHistory.set(symbol, hist);
+  } catch {}
+}
+
+function classifyLSR(symbol, direction) {
+  const hist = state.lsrHistory.get(symbol);
+  if (!hist || hist.length < 4) {
+    return { class: 'unknown', label: '데이터부족', current: null, change: null };
+  }
+  const cur = hist[hist.length - 1];
+  const earlier = hist[Math.max(0, hist.length - 12)];
+  // 1시간 전 대비 큰손 비율 변화
+  const ratioChange = cur.ratio - earlier.ratio;
+  const longChange = cur.longRatio - earlier.longRatio;
+  const shortChange = cur.shortRatio - earlier.shortRatio;
+
+  let cls = 'neutral', label = '중립';
+
+  // 함정 패턴: 펀딩과 큰손 방향이 일치하지 않음
+  // 펀딩 음수(숏 과밀) + 큰손 숏 비율 증가 = 큰손은 숏 = 진짜 하락 위험 (롱 진입은 함정)
+  // 펀딩 양수(롱 과밀) + 큰손 롱 비율 증가 = 큰손도 롱 = 추가 상승 가능 (숏 진입 함정)
+  if (direction === 'long') {
+    // 롱 진입 시 큰손이 숏을 늘리고 있으면 함정
+    if (shortChange > 0.02 && cur.shortRatio > cur.longRatio) {
+      cls = 'trap'; label = '큰손숏(함정)';
+    } else if (longChange > 0.02 && cur.longRatio > cur.shortRatio) {
+      cls = 'confirm'; label = '큰손롱(확증)';
+    } else if (cur.longRatio > cur.shortRatio) {
+      cls = 'aligned'; label = '큰손롱';
+    } else {
+      cls = 'opposite'; label = '큰손숏';
+    }
+  } else {
+    if (longChange > 0.02 && cur.longRatio > cur.shortRatio) {
+      cls = 'trap'; label = '큰손롱(함정)';
+    } else if (shortChange > 0.02 && cur.shortRatio > cur.longRatio) {
+      cls = 'confirm'; label = '큰손숏(확증)';
+    } else if (cur.shortRatio > cur.longRatio) {
+      cls = 'aligned'; label = '큰손숏';
+    } else {
+      cls = 'opposite'; label = '큰손롱';
+    }
+  }
+
+  return { class: cls, label, current: cur, change: ratioChange };
+}
+
+// ============================================================================
+// v3: EMA, ADX, 공간거리 (라이브)
+// ============================================================================
+function calcEMA(values, period) {
+  if (values.length < period) return null;
+  const k = 2 / (period + 1);
+  let ema = values.slice(0, period).reduce((a,b) => a+b, 0) / period;
+  for (let i = period; i < values.length; i++) {
+    ema = values[i] * k + ema * (1 - k);
+  }
+  return ema;
+}
+
+function calcADX(klines, period = 14) {
+  // klines: [{high, low, close}], 표준 Wilder ADX
+  if (klines.length < period * 2 + 1) return null;
+  const tr = [], plusDM = [], minusDM = [];
+  for (let i = 1; i < klines.length; i++) {
+    const c = klines[i], p = klines[i-1];
+    const highDiff = c.high - p.high;
+    const lowDiff = p.low - c.low;
+    const t = Math.max(c.high - c.low, Math.abs(c.high - p.close), Math.abs(c.low - p.close));
+    tr.push(t);
+    plusDM.push((highDiff > lowDiff && highDiff > 0) ? highDiff : 0);
+    minusDM.push((lowDiff > highDiff && lowDiff > 0) ? lowDiff : 0);
+  }
+  // Wilder smoothing
+  let trS = tr.slice(0, period).reduce((a,b)=>a+b, 0);
+  let pS = plusDM.slice(0, period).reduce((a,b)=>a+b, 0);
+  let mS = minusDM.slice(0, period).reduce((a,b)=>a+b, 0);
+  const dxArr = [];
+  for (let i = period; i < tr.length; i++) {
+    if (i > period) {
+      trS = trS - trS/period + tr[i];
+      pS = pS - pS/period + plusDM[i];
+      mS = mS - mS/period + minusDM[i];
+    }
+    if (trS === 0) continue;
+    const plusDI = (pS / trS) * 100;
+    const minusDI = (mS / trS) * 100;
+    const sum = plusDI + minusDI;
+    if (sum === 0) continue;
+    const dx = (Math.abs(plusDI - minusDI) / sum) * 100;
+    dxArr.push(dx);
+  }
+  if (dxArr.length < period) return null;
+  let adx = dxArr.slice(0, period).reduce((a,b)=>a+b, 0) / period;
+  for (let i = period; i < dxArr.length; i++) {
+    adx = (adx * (period - 1) + dxArr[i]) / period;
+  }
+  return adx;
+}
+
+function getTrendInfo(symbol, direction) {
+  // 1H EMA50 기반 추세 판단
+  const klines = state.klines1h.get(symbol);
+  if (!klines || klines.length < 60) return { aligned: null, adx: null, trendDir: null };
+  const closes = klines.map(k => k.close);
+  const ema50 = calcEMA(closes, 50);
+  const adx = calcADX(klines, 14);
+  if (ema50 === null) return { aligned: null, adx, trendDir: null };
+  const last = closes[closes.length - 1];
+  const trendDir = last > ema50 ? 'up' : 'down';
+  let aligned;
+  if (direction === 'long') aligned = trendDir === 'up';
+  else aligned = trendDir === 'down';
+  return { aligned, adx, trendDir };
+}
+
+function getSpaceMultiple(symbol, direction, currentPrice) {
+  // 4h 고저점까지의 거리를 TP 단위로 측정
+  const klines = state.klines5m.get(symbol);
+  if (!klines || klines.length < 48) return null;
+  const recent48 = klines.slice(-48);  // 최근 4시간 (5m * 48)
+  let target;
+  if (direction === 'long') {
+    const high = Math.max(...recent48.map(k => k.high));
+    if (high <= currentPrice) return 0;
+    target = (high - currentPrice) / currentPrice;
+  } else {
+    const low = Math.min(...recent48.map(k => k.low));
+    if (low >= currentPrice) return 0;
+    target = (currentPrice - low) / currentPrice;
+  }
+  return target / CONFIG.defaultTpForSpaceCheck;
+}
+
+async function fetchKlinesLive(symbol, interval, limit) {
+  try {
+    const url = `${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+    const data = await fetchJSON(url);
+    return data.map(k => ({
+      openTime: k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+      volume: +k[5], closeTime: k[6], quoteVolume: +k[7],
+      takerBuyBaseVol: +k[9], takerBuyQuoteVol: +k[10],
+    }));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function ensureKlinesForSymbol(symbol) {
+  const lastFetch = state.klines1hLastFetch.get(symbol) || 0;
+  const now = Date.now();
+  if (now - lastFetch < 5 * 60 * 1000) return;
+  state.klines1hLastFetch.set(symbol, now);
+  const [k1h, k5m] = await Promise.all([
+    fetchKlinesLive(symbol, '1h', 100),  // EMA50 + ADX
+    fetchKlinesLive(symbol, '5m', 288),  // 24h (5m * 288) - KST 09시 기준 변동률 + 4h 공간거리
+  ]);
+  if (k1h) state.klines1h.set(symbol, k1h);
+  if (k5m) state.klines5m.set(symbol, k5m);
+}
+
+// ============================================================================
+// v3.3: KST 09:00 기준 일변동 계산
+// KST 09:00 = UTC 00:00 (한국시간 오전 9시 = UTC 자정)
+// ============================================================================
+function getKstNineReferenceTs(nowMs) {
+  // 마지막으로 지난 (또는 방금 지난) UTC 00:00 = KST 09:00
+  const d = new Date(nowMs);
+  const utcMidnight = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0);
+  // 만약 현재가 정확히 UTC 00:00 이전 (즉 KST 09:00 이전) 이면 어제 UTC 00:00
+  // 위의 utcMidnight 자체가 "오늘 UTC 자정"인데 현재가 그 이후라면 OK
+  // 그대로 반환 (now >= utcMidnight 이면 오늘 자정, 그 미만이면 어제 자정)
+  return nowMs >= utcMidnight ? utcMidnight : utcMidnight - 24*60*60*1000;
+}
+
+function getKstDailyChange(symbol, currentPrice) {
+  const klines = state.klines5m.get(symbol);
+  if (!klines || klines.length === 0 || !currentPrice) return null;
+  const refTs = getKstNineReferenceTs(Date.now());
+  // 기준 시각의 시가(open)를 사용. 가장 가까운 봉의 open.
+  // 5분 봉이므로 refTs와 정확히 일치하는 openTime 찾거나, 그 직후 첫 봉 사용
+  let refKline = null;
+  for (const k of klines) {
+    if (k.openTime >= refTs) {
+      refKline = k;
+      break;
+    }
+  }
+  if (!refKline) {
+    // klines 데이터가 refTs 이후의 것을 모두 못 가졌다는 뜻
+    // (예: 24시간보다 짧은 데이터가 들어온 경우)
+    // 가장 오래된 봉 사용
+    refKline = klines[0];
+    if (!refKline) return null;
+  }
+  // 너무 오래된 데이터면 (refTs로부터 1시간 이상 떨어진 봉) null
+  if (Math.abs(refKline.openTime - refTs) > 60*60*1000) return null;
+  if (refKline.open === 0) return null;
+  return (currentPrice - refKline.open) / refKline.open;
+}
+
+function getTakerRatio(symbol) {
+  const data = state.aggTrade.get(symbol);
+  if (!data || data.trades.length < 10) return null;
+  const cutoff = Date.now() - CONFIG.takerWindowMs;
+  const recent = data.trades.filter(t => t.ts >= cutoff);
+  if (recent.length < 10) return null;
+  let buy = 0, sell = 0;
+  for (const t of recent) {
+    if (t.isBuy) buy += t.qty * t.price;
+    else sell += t.qty * t.price;
+  }
+  const total = buy + sell;
+  if (total === 0) return null;
+  return { buyRatio: buy/total, sellRatio: sell/total, count: recent.length };
+}
+
+// v3.4: 1분 윈도우 빠른 평가 (시그널 발화 트리거용)
+function getTakerRatioFast(symbol) {
+  const data = state.aggTrade.get(symbol);
+  if (!data || data.trades.length < 5) return null;
+  const cutoff = Date.now() - CONFIG.takerWindowFastMs;
+  const recent = data.trades.filter(t => t.ts >= cutoff);
+  if (recent.length < 5) return null;
+  let buy = 0, sell = 0;
+  for (const t of recent) {
+    if (t.isBuy) buy += t.qty * t.price;
+    else sell += t.qty * t.price;
+  }
+  const total = buy + sell;
+  if (total === 0) return null;
+  return { buyRatio: buy/total, sellRatio: sell/total, count: recent.length };
+}
+
+function getVolumeSpike(symbol) {
+  const data = state.aggTrade.get(symbol);
+  const ticker = state.ticker24h.get(symbol);
+  if (!data || !ticker || data.trades.length < 20) return null;
+  const cutoff = Date.now() - 5*60*1000;
+  const recent = data.trades.filter(t => t.ts >= cutoff);
+  const recentVol = recent.reduce((a,t) => a + t.qty * t.price, 0);
+  const expected = ticker.volume / (24*12);
+  if (expected === 0) return null;
+  return recentVol / expected;
+}
+
+// v3.4: 1분 윈도우 거래량 스파이크
+function getVolumeSpikeFast(symbol) {
+  const data = state.aggTrade.get(symbol);
+  const ticker = state.ticker24h.get(symbol);
+  if (!data || !ticker || data.trades.length < 10) return null;
+  const cutoff = Date.now() - CONFIG.volSpikeWindowMs;
+  const recent = data.trades.filter(t => t.ts >= cutoff);
+  const recentVol = recent.reduce((a,t) => a + t.qty * t.price, 0);
+  // 24h 거래량 / 1440분 = 1분 평균 (오류있던 부분: 24h/12 = 5분 평균이라 잘못)
+  const expectedPerMin = ticker.volume / (24*60);
+  if (expectedPerMin === 0) return null;
+  return recentVol / expectedPerMin;
+}
+
+// v3.4: CVD (Cumulative Volume Delta) 계산
+function getCVDInfo(symbol, direction) {
+  const data = state.aggTrade.get(symbol);
+  if (!data || data.trades.length < 30) return { class: 'unknown', label: '데이터부족', cvd: null, divergence: null };
+  const cutoff = Date.now() - CONFIG.cvdWindowMs;
+  const recent = data.trades.filter(t => t.ts >= cutoff);
+  if (recent.length < 30) return { class: 'unknown', label: '데이터부족', cvd: null, divergence: null };
+
+  // CVD: 누적 매수 - 매도 (USD)
+  let cumDelta = 0;
+  const cvdSeries = [];
+  const priceSeries = [];
+  for (const t of recent) {
+    const usd = t.qty * t.price;
+    cumDelta += t.isBuy ? usd : -usd;
+    cvdSeries.push({ ts: t.ts, cvd: cumDelta });
+    priceSeries.push({ ts: t.ts, price: t.price });
+  }
+
+  // 전반/후반 구간 비교 (다이버전스 검출)
+  const mid = Math.floor(recent.length / 2);
+  const firstHalf = cvdSeries.slice(0, mid);
+  const secondHalf = cvdSeries.slice(mid);
+  const firstPriceHalf = priceSeries.slice(0, mid);
+  const secondPriceHalf = priceSeries.slice(mid);
+
+  const cvdStart = firstHalf[0].cvd;
+  const cvdMid = secondHalf[0].cvd;
+  const cvdEnd = secondHalf[secondHalf.length-1].cvd;
+  const priceStart = firstPriceHalf[0].price;
+  const priceMid = secondPriceHalf[0].price;
+  const priceEnd = secondPriceHalf[secondPriceHalf.length-1].price;
+
+  const cvdDir2 = cvdEnd - cvdMid;        // 후반 CVD 방향
+  const priceDir2 = priceEnd - priceMid;  // 후반 가격 방향
+
+  // 다이버전스: 가격과 CVD가 반대 방향
+  const priceUp = priceDir2 > priceMid * 0.001;
+  const priceDown = priceDir2 < -priceMid * 0.001;
+  const cvdUp = cvdDir2 > Math.abs(cvdMid) * 0.05 + 1;
+  const cvdDown = cvdDir2 < -(Math.abs(cvdMid) * 0.05 + 1);
+
+  let cls = 'neutral', label = '중립';
+
+  if (direction === 'long') {
+    // 롱 진입: CVD ↑ (매수 우세) + 가격 ↑ = 확증
+    // 가격 ↓ 인데 CVD ↑ = 매수 다이버전스 (반전 신호) = 확증
+    if (cvdUp && priceUp) { cls = 'confirm'; label = 'CVD확증'; }
+    else if (cvdUp && priceDown) { cls = 'divergence'; label = 'CVD다이버(매수)'; }
+    else if (cvdDown && priceUp) { cls = 'weak'; label = 'CVD약(랠리역행)'; }
+    else if (cvdDown && priceDown) { cls = 'aligned'; label = 'CVD하락동행'; }
+  } else {
+    // 숏 진입: CVD ↓ + 가격 ↓ = 확증
+    if (cvdDown && priceDown) { cls = 'confirm'; label = 'CVD확증'; }
+    else if (cvdDown && priceUp) { cls = 'divergence'; label = 'CVD다이버(매도)'; }
+    else if (cvdUp && priceDown) { cls = 'weak'; label = 'CVD약(하락역행)'; }
+    else if (cvdUp && priceUp) { cls = 'aligned'; label = 'CVD상승동행'; }
+  }
+
+  return { class: cls, label, cvd: cumDelta, divergence: cvdDir2, priceDir: priceDir2 };
+}
+
+// v3.4: 청산 정보
+function getLiquidationInfo(symbol, direction) {
+  if (!CONFIG.liquidationEnabled) return { class: 'disabled', label: '비활성', count: 0, totalUsd: 0 };
+  const list = state.liquidations.get(symbol);
+  if (!list || list.length === 0) return { class: 'none', label: '없음', count: 0, totalUsd: 0 };
+  const cutoff = Date.now() - CONFIG.liquidationWindowMs;
+  const recent = list.filter(l => l.ts >= cutoff);
+  if (recent.length === 0) return { class: 'none', label: '없음', count: 0, totalUsd: 0 };
+
+  // 청산 사이드:
+  // SELL = 롱 포지션이 강제 청산되며 매도됨 (=롱청산)
+  // BUY = 숏 포지션이 강제 청산되며 매수됨 (=숏청산)
+  const longLiqs = recent.filter(l => l.side === 'SELL');
+  const shortLiqs = recent.filter(l => l.side === 'BUY');
+  const longLiqUsd = longLiqs.reduce((a,l) => a + l.value, 0);
+  const shortLiqUsd = shortLiqs.reduce((a,l) => a + l.value, 0);
+
+  let cls = 'none', label = '없음';
+  let cascadeMatch = false;
+
+  if (direction === 'long') {
+    // 롱 진입 후보 = 펀딩 음수 = 숏 과밀
+    // 숏 청산 발생 = 숏 커버 = 가격 상승 압력 = 확증
+    if (shortLiqUsd >= CONFIG.liquidationCascadeUSD) {
+      cls = 'cascade'; label = `숏청산 $${(shortLiqUsd/1000).toFixed(0)}K`;
+      cascadeMatch = true;
+    } else if (longLiqUsd >= CONFIG.liquidationCascadeUSD) {
+      cls = 'opposite'; label = `롱청산 $${(longLiqUsd/1000).toFixed(0)}K`;
+    } else if (recent.length > 0) {
+      cls = 'minor'; label = `소규모 ${recent.length}건`;
+    }
+  } else {
+    // 숏 진입 = 롱 과밀
+    if (longLiqUsd >= CONFIG.liquidationCascadeUSD) {
+      cls = 'cascade'; label = `롱청산 $${(longLiqUsd/1000).toFixed(0)}K`;
+      cascadeMatch = true;
+    } else if (shortLiqUsd >= CONFIG.liquidationCascadeUSD) {
+      cls = 'opposite'; label = `숏청산 $${(shortLiqUsd/1000).toFixed(0)}K`;
+    } else if (recent.length > 0) {
+      cls = 'minor'; label = `소규모 ${recent.length}건`;
+    }
+  }
+
+  return { class: cls, label, count: recent.length, totalUsd: longLiqUsd + shortLiqUsd, cascadeMatch };
+}
+
+function evaluateLayer3(symbol, l2) {
+  if (!l2) return null;  // 방어 코드
+  // v3.4: 1분 윈도우 빠른 평가 (발화 즉시성 향상)
+  const takerFast = getTakerRatioFast(symbol);
+  const spikeFast = getVolumeSpikeFast(symbol);
+  if (!takerFast || spikeFast === null) return null;
+  const ratio = l2.direction === 'long' ? takerFast.buyRatio : takerFast.sellRatio;
+  if (ratio < CONFIG.takerRatioThreshold) return null;
+  if (spikeFast < CONFIG.volumeSpikeRatio) return null;
+
+  // v3: 추세, 레짐, 공간
+  const trend = getTrendInfo(symbol, l2.direction);
+  const spaceMul = getSpaceMultiple(symbol, l2.direction, l2.lastPrice);
+
+  // 강추세 역행 하드 차단
+  if (CONFIG.regimeFilterEnabled && trend.adx !== null &&
+      trend.adx >= CONFIG.adxStrongThreshold && trend.aligned === false) {
+    return null;
+  }
+
+  // v3.2: OI 궤적 + 정점 하드 차단
+  const oiTraj = classifyOITrajectory(symbol);
+  if (CONFIG.oiTrajectoryEnabled && CONFIG.oiPeakHardBlock && oiTraj.class === 'peak') {
+    return null;
+  }
+
+  // v3.2: LSR
+  const lsr = classifyLSR(symbol, l2.direction);
+
+  // v3.4: CVD + 청산
+  const cvd = CONFIG.cvdEnabled ? getCVDInfo(symbol, l2.direction) : { class: 'unknown' };
+  const liquidation = getLiquidationInfo(symbol, l2.direction);
+
+  // v3.5: OI 5분 가속도
+  const oi5m = classifyOI5m(symbol, l2.direction);
+  const priceMove5m = getPriceMove5m(symbol, l2.lastPrice);
+
+  const score = computeScore({
+    funding: l2.funding, oiGrowth: l2.oiGrowth, oiGrowth4h: l2.oiGrowth4h,
+    takerRatio: ratio, volSpike: spikeFast, fundingZ: l2.fundingZ,
+    trendAligned: trend.aligned, adx: trend.adx, trendDir: trend.trendDir,
+    spaceMultiple: spaceMul, direction: l2.direction,
+    oiTrajectory: oiTraj, lsr, cvd, liquidation,
+    oi5m, priceMove: priceMove5m,
+  });
+  if (score.total < CONFIG.minSignalScore) return null;
+  return {
+    ...l2,
+    takerRatio: ratio, volSpike: spikeFast, sampleCount: takerFast.count,
+    score,
+    trend, spaceMultiple: spaceMul,
+    oiTrajectory: oiTraj, lsr, cvd, liquidation,
+    oi5m, priceMove5m,
+  };
+}
+
+// ============================================================================
+// 폴링 사이클
+// ============================================================================
+async function runPollingCycle() {
+  // v3.4: Rate Limit 자동 일시정지 체크
+  if (state.rateLimit.paused) {
+    if (Date.now() < state.rateLimit.pausedUntil) {
+      const remaining = Math.ceil((state.rateLimit.pausedUntil - Date.now()) / 1000);
+      setStatus('poll', 'red', `차단 ${remaining}s`);
+      return;
+    } else {
+      state.rateLimit.paused = false;
+      state.rateLimit.lastError = null;
+      log('info', '✅ Rate Limit 차단 해제 - 재개');
+    }
+  }
+
+  // v3.4: 95% 도달 시 자동 일시정지
+  const weightPct = (state.rateLimit.weight / state.rateLimit.weightLimit) * 100;
+  if (weightPct >= CONFIG.rateLimitPausePercent) {
+    state.rateLimit.paused = true;
+    state.rateLimit.pausedUntil = Date.now() + 60_000;  // 1분 자체 일시정지
+    log('error', `⚠ Weight ${weightPct.toFixed(0)}% - 자동 일시정지 (1분)`);
+    setStatus('poll', 'red', `자체 차단 60s`);
+    return;
+  }
+
+  // v3.4: 80% 도달 시 격번 폴링 (사실상 간격 2배)
+  if (weightPct >= CONFIG.rateLimitSlowPercent) {
+    state.rateLimit._skipNext = !state.rateLimit._skipNext;
+    if (state.rateLimit._skipNext) {
+      setStatus('poll', 'amber', `Weight ${weightPct.toFixed(0)}% - 격번`);
+      renderRateLimit();
+      return;
+    }
+  }
+
+  const settle = isInSettlementWindow();
+  document.getElementById('settlement-warn').style.display = settle ? 'inline' : 'none';
+  if (settle) { setStatus('poll', 'amber', '정산창'); return; }
+
+  try {
+    setStatus('poll', 'amber', '폴링 중');
+    await Promise.all([pollFunding(), pollTicker24h()]);
+
+    const l1Pass = [];
+    for (const sym of state.symbols) {
+      const r = evaluateLayer1(sym);
+      if (r) l1Pass.push({ symbol: sym, ...r });
+    }
+
+    const newSyms = l1Pass.filter(({ symbol }) => !state.oiHistory.has(symbol));
+    const oldSyms = l1Pass.filter(({ symbol }) => state.oiHistory.has(symbol));
+
+    for (let i = 0; i < newSyms.length; i += 5) {
+      const batch = newSyms.slice(i, i+5);
+      await Promise.all(batch.map(({ symbol }) => bootstrapOIHistory(symbol)));
+    }
+    await Promise.all(oldSyms.map(({ symbol }) => pollOIForSymbol(symbol)));
+
+    const newGp = new Map();
+    for (const item of l1Pass) {
+      const r2 = evaluateLayer2(item.symbol, item);
+      if (r2) newGp.set(item.symbol, r2);
+    }
+    state.gunpowder = newGp;
+
+    // v3: 화약고 종목들의 1h/5m 캔들 확보 (5분 캐싱)
+    const symbolsForKlines = [...newGp.keys()];
+    for (let i = 0; i < symbolsForKlines.length; i += 4) {
+      const batch = symbolsForKlines.slice(i, i+4);
+      await Promise.all(batch.map(s => ensureKlinesForSymbol(s)));
+    }
+
+    // v3.2: LSR도 화약고 종목만 (15분 캐싱)
+    if (CONFIG.lsrEnabled) {
+      for (let i = 0; i < symbolsForKlines.length; i += 4) {
+        const batch = symbolsForKlines.slice(i, i+4);
+        await Promise.all(batch.map(s => fetchLSR(s)));
+      }
+    }
+
+    syncWebSocketSubscriptions();
+
+    setStatus('poll', 'green', `정상 (L1:${l1Pass.length} L2:${state.gunpowder.size})`);
+    document.getElementById('last-update').textContent = `최종 ${new Date().toLocaleTimeString('ko-KR')}`;
+    document.getElementById('gunpowder-count').textContent = `${state.gunpowder.size}개 후보`;
+    renderGunpowder();
+    renderRateLimit();
+  } catch (e) {
+    setStatus('poll', 'red', '오류');
+    log('error', `폴링 실패: ${e.message}`);
+  }
+}
+
+// ============================================================================
+// WebSocket
+// ============================================================================
+function syncWebSocketSubscriptions() {
+  const desired = new Set(state.gunpowder.keys());
+  const cur = state.wsSubscribed;
+  if (desired.size === cur.size && [...desired].every(s => cur.has(s))) return;
+  reconnectWebSocket(desired);
+}
+
+function reconnectWebSocket(symbols) {
+  if (state.ws) {
+    try { state.ws.onclose = null; state.ws.close(); } catch {}
+    state.ws = null;
+  }
+  if (state.reconnectTimer) clearTimeout(state.reconnectTimer);
+
+  if (symbols.size === 0) {
+    state.wsSubscribed = new Set();
+    setStatus('ws', '', '구독 없음');
+    return;
+  }
+
+  const streams = [...symbols].map(s => `${s.toLowerCase()}@aggTrade`).join('/');
+  state.wsSubscribed = new Set(symbols);
+  setStatus('ws', 'amber', `연결중 (${symbols.size})`);
+
+  try {
+    const ws = new WebSocket(`${WS_BASE}?streams=${streams}`);
+    state.ws = ws;
+    ws.onopen = () => { setStatus('ws', 'green', `연결됨 (${symbols.size})`); log('info', `WS 연결 ${symbols.size}종목`); };
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.data) handleAggTrade(msg.data);
+      } catch {}
+    };
+    ws.onerror = () => setStatus('ws', 'red', '오류');
+    ws.onclose = () => {
+      setStatus('ws', 'red', '끊김');
+      state.reconnectTimer = setTimeout(() => {
+        if (state.gunpowder.size > 0) reconnectWebSocket(new Set(state.gunpowder.keys()));
+      }, 5000);
+    };
+  } catch (e) {
+    log('error', `WS 실패: ${e.message}`);
+  }
+}
+
+function handleAggTrade(d) {
+  const symbol = d.s;
+  const qty = parseFloat(d.q);
+  const price = parseFloat(d.p);
+  if (isNaN(qty) || isNaN(price)) return;
+  const isBuy = !d.m;
+  const ts = d.T;
+  if (!state.aggTrade.has(symbol)) state.aggTrade.set(symbol, { trades: [], lastFire: 0 });
+  const obj = state.aggTrade.get(symbol);
+  // v3.4: 30분 이내 데이터만 추가 (cutoff 초과 데이터는 무시)
+  const cutoff = Date.now() - Math.max(CONFIG.cvdWindowMs, 30*60*1000);
+  if (ts < cutoff) return;  // 너무 오래된 데이터는 추가 거부
+  obj.trades.push({ ts, qty, price, isBuy });
+  // 정리: 첫 번째부터 제거
+  while (obj.trades.length > 0 && obj.trades[0].ts < cutoff) obj.trades.shift();
+  // 안전장치: 비정상적으로 많이 쌓이면 (예: 시간 역순) 강제 정리
+  if (obj.trades.length > 100000) {
+    obj.trades = obj.trades.filter(t => t.ts >= cutoff);
+  }
+}
+
+// v3.4: 청산 스트림 (!forceOrder@arr - 전 종목)
+function connectLiquidationStream() {
+  if (!CONFIG.liquidationEnabled) return;
+  if (state.liquidationStream) {
+    try { state.liquidationStream.close(); } catch {}
+  }
+  try {
+    const ws = new WebSocket(`wss://fstream.binance.com/ws/!forceOrder@arr`);
+    state.liquidationStream = ws;
+    ws.onopen = () => log('info', '청산 스트림 연결됨 (!forceOrder@arr)');
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        // 형식: { e: 'forceOrder', E: ts, o: { s, S, q, p, ap, X, ... } }
+        const o = msg.o;
+        if (!o) return;
+        const symbol = o.s;
+        const side = o.S;  // 'BUY' or 'SELL'
+        const qty = parseFloat(o.q);
+        const price = parseFloat(o.ap || o.p);  // ap = average price
+        if (isNaN(qty) || isNaN(price)) return;
+        const value = qty * price;
+        const ts = msg.E || Date.now();
+        if (!state.liquidations.has(symbol)) state.liquidations.set(symbol, []);
+        const list = state.liquidations.get(symbol);
+        list.push({ ts, side, qty, price, value });
+        // 5분 보관
+        const cutoff = Date.now() - 5*60*1000;
+        while (list.length > 0 && list[0].ts < cutoff) list.shift();
+      } catch {}
+    };
+    ws.onerror = () => log('error', '청산 스트림 오류');
+    ws.onclose = () => {
+      log('info', '청산 스트림 끊김 - 5초 후 재연결');
+      setTimeout(connectLiquidationStream, 5000);
+    };
+  } catch (e) {
+    log('error', `청산 스트림 실패: ${e.message}`);
+  }
+}
+
+// ============================================================================
+// 시그널 평가
+// ============================================================================
+function runSignalEvaluation() {
+  if (isInSettlementWindow()) return;
+  const now = Date.now();
+  for (const [symbol, l2] of state.gunpowder.entries()) {
+    const at = state.aggTrade.get(symbol);
+    if (!at) continue;
+    if (now - at.lastFire < CONFIG.cooldownMs) continue;
+    const r3 = evaluateLayer3(symbol, l2);
+    if (r3) {
+      at.lastFire = now;
+      const sig = { ts: now, symbol, ...r3 };
+      state.signals.unshift(sig);
+      if (state.signals.length > 50) state.signals.pop();
+      const trendStr = r3.trend.aligned === true ? '추세✓' : r3.trend.aligned === false ? '추세✗' : '';
+      const adxStr = r3.trend.adx !== null ? ` ADX${r3.trend.adx.toFixed(0)}` : '';
+      const spaceStr = r3.spaceMultiple !== null ? ` 공간${r3.spaceMultiple.toFixed(1)}x` : '';
+      const oi1h = r3.oiGrowth !== null ? `${(r3.oiGrowth*100).toFixed(0)}%` : '—';
+      const oi4h = r3.oiGrowth4h !== null && r3.oiGrowth4h !== undefined ? `${(r3.oiGrowth4h*100).toFixed(0)}%` : '—';
+      const trajStr = r3.oiTrajectory && r3.oiTrajectory.class !== 'unknown' ? ` 궤적[${r3.oiTrajectory.label}]` : '';
+      const lsrStr = r3.lsr && r3.lsr.class !== 'unknown' ? ` ${r3.lsr.label}` : '';
+      const cvdStr = r3.cvd && r3.cvd.class !== 'unknown' && r3.cvd.class !== 'neutral' ? ` ${r3.cvd.label}` : '';
+      const liqStr = r3.liquidation && r3.liquidation.class === 'cascade' ? ` 🔥${r3.liquidation.label}` : '';
+      const oi5mStr = r3.oi5m && (r3.oi5m.class === 'surge' || r3.oi5m.class === 'drop') ? ` OI5m[${r3.oi5m.label}]` : '';
+      log('signal',
+        `🔥 ${symbol} ${r3.direction.toUpperCase()} [${r3.score.total}점] · ` +
+        `펀딩 ${(r3.funding*100).toFixed(3)}% · OI ${oi1h}/${oi4h}${trajStr}${oi5mStr} · ` +
+        `테이커 ${(r3.takerRatio*100).toFixed(0)}% · 거래량 ${r3.volSpike.toFixed(1)}x · ${trendStr}${adxStr}${spaceStr}${lsrStr}${cvdStr}${liqStr}`
+      );
+      renderSignals();
+      try {
+        if (Notification.permission === 'granted') {
+          new Notification(`🔥 ${symbol} ${r3.direction.toUpperCase()} ${r3.score.total}점`, {
+            body: `펀딩 ${(r3.funding*100).toFixed(3)}% / 테이커 ${(r3.takerRatio*100).toFixed(0)}%`,
+          });
+        }
+      } catch {}
+    }
+  }
+  renderGunpowder();
+}
+
+// ============================================================================
+// 백테스트
+// ============================================================================
+const bt = {
+  running: false,
+  trades: [],
+  klines: [],
+  funding: [],
+  oi: [],
+  symbol: '',
+};
+
+async function fetchKlinesAll(symbol, interval, startTs, endTs) {
+  const all = [];
+  let cursor = startTs;
+  while (cursor < endTs) {
+    const url = `${API_BASE}/fapi/v1/klines?symbol=${symbol}&interval=${interval}&startTime=${cursor}&limit=1500`;
+    const data = await fetchJSON(url);
+    if (data.length === 0) break;
+    for (const k of data) {
+      all.push({
+        openTime: k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4],
+        volume: +k[5], closeTime: k[6], quoteVolume: +k[7],
+        takerBuyBaseVol: +k[9], takerBuyQuoteVol: +k[10],
+      });
+    }
+    cursor = data[data.length-1][6] + 1;
+    if (data.length < 1500) break;
+  }
+  return all.filter(k => k.closeTime <= endTs);
+}
+
+async function fetchFundingHistoryAll(symbol, startTs, endTs) {
+  const all = [];
+  let cursor = startTs;
+  while (cursor < endTs) {
+    const url = `${API_BASE}/fapi/v1/fundingRate?symbol=${symbol}&startTime=${cursor}&limit=1000`;
+    const data = await fetchJSON(url);
+    if (data.length === 0) break;
+    for (const d of data) {
+      all.push({ ts: d.fundingTime, rate: parseFloat(d.fundingRate) });
+    }
+    cursor = data[data.length-1].fundingTime + 1;
+    if (data.length < 1000) break;
+  }
+  return all.filter(f => f.ts <= endTs);
+}
+
+async function fetchOIHistAll(symbol, startTs, endTs) {
+  const all = [];
+  let cursor = startTs;
+  while (cursor < endTs) {
+    const url = `${API_BASE}/futures/data/openInterestHist?symbol=${symbol}&period=5m&startTime=${cursor}&endTime=${endTs}&limit=500`;
+    const data = await fetchJSON(url);
+    if (data.length === 0) break;
+    for (const d of data) {
+      all.push({ ts: parseInt(d.timestamp), oi: parseFloat(d.sumOpenInterestValue) });
+    }
+    cursor = parseInt(data[data.length-1].timestamp) + 1;
+    if (data.length < 500) break;
+  }
+  return all.filter(o => o.ts <= endTs && !isNaN(o.oi));
+}
+
+async function fetchLSRHistAll(symbol, startTs, endTs) {
+  const all = [];
+  let cursor = startTs;
+  while (cursor < endTs) {
+    const url = `${API_BASE}/futures/data/topLongShortPositionRatio?symbol=${symbol}&period=5m&startTime=${cursor}&endTime=${endTs}&limit=500`;
+    const data = await fetchJSON(url);
+    if (!Array.isArray(data) || data.length === 0) break;
+    for (const d of data) {
+      all.push({
+        ts: parseInt(d.timestamp),
+        longRatio: parseFloat(d.longAccount),
+        shortRatio: parseFloat(d.shortAccount),
+        ratio: parseFloat(d.longShortRatio),
+      });
+    }
+    cursor = parseInt(data[data.length-1].timestamp) + 1;
+    if (data.length < 500) break;
+  }
+  return all.filter(o => o.ts <= endTs && !isNaN(o.ratio));
+}
+
+function getValueAt(arr, ts, maxDeltaMs) {
+  // 이진 탐색으로 가장 가까운 값 찾기
+  if (arr.length === 0) return null;
+  let lo = 0, hi = arr.length - 1, best = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (arr[mid].ts <= ts) {
+      best = arr[mid];
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  if (!best) return null;
+  if (maxDeltaMs && (ts - best.ts) > maxDeltaMs) return null;
+  return best;
+}
+
+function btProgress(text, pct) {
+  document.getElementById('bt-progress-text').textContent = text;
+  document.getElementById('bt-bar').style.width = `${pct}%`;
+  document.getElementById('bt-progress').style.display = pct > 0 ? 'block' : 'none';
+}
+
+async function runBacktest() {
+  if (bt.running) return;
+  bt.running = true;
+  document.getElementById('bt-run').disabled = true;
+  bt.trades = [];
+
+  const symbol = document.getElementById('bt-symbol').value.trim().toUpperCase();
+  const days = Math.min(30, Math.max(1, +document.getElementById('bt-days').value));
+  const tpPct = +document.getElementById('bt-tp').value / 100;
+  const slPct = +document.getElementById('bt-sl').value / 100;
+  const timeStop = +document.getElementById('bt-time').value * 60 * 1000;
+  const feeRoundTrip = +document.getElementById('bt-fee').value / 100;
+  const minScore = +document.getElementById('bt-minscore').value;
+
+  const endTs = Date.now();
+  const startTs = endTs - days * 24 * 60 * 60 * 1000;
+
+  try {
+    btProgress('5분봉 다운로드 중...', 8);
+    const klines = await fetchKlinesAll(symbol, '5m', startTs, endTs);
+    log('info', `BT: 5분봉 ${klines.length}개 로드`);
+
+    btProgress('1시간봉 다운로드 중...', 25);
+    const klines1h = await fetchKlinesAll(symbol, '1h', startTs - 100*60*60*1000, endTs);
+    log('info', `BT: 1시간봉 ${klines1h.length}개 로드`);
+
+    btProgress('펀딩 히스토리 다운로드 중...', 45);
+    const funding = await fetchFundingHistoryAll(symbol, startTs, endTs);
+    log('info', `BT: 펀딩 ${funding.length}개 로드`);
+
+    btProgress('OI 히스토리 다운로드 중...', 60);
+    const oiHist = await fetchOIHistAll(symbol, startTs, endTs);
+    log('info', `BT: OI ${oiHist.length}개 로드`);
+
+    btProgress('큰손 LSR 다운로드 중...', 72);
+    const lsrHist = await fetchLSRHistAll(symbol, startTs, endTs);
+    log('info', `BT: LSR ${lsrHist.length}개 로드`);
+
+    if (klines.length < 300 || klines1h.length < 60 || funding.length < 5 || oiHist.length < 60) {
+      throw new Error(`데이터 부족: 5m ${klines.length}, 1h ${klines1h.length}, 펀딩 ${funding.length}, OI ${oiHist.length}`);
+    }
+
+    bt.klines = klines; bt.funding = funding; bt.oi = oiHist; bt.lsr = lsrHist; bt.symbol = symbol;
+
+    btProgress('시뮬레이션 중...', 80);
+    await new Promise(r => setTimeout(r, 50));
+
+    // 24h 거래량 롤링 합 사전 계산
+    const win24h = 288;  // 5m * 288 = 24h
+    const cumVol = [0];
+    for (let i = 0; i < klines.length; i++) cumVol.push(cumVol[i] + klines[i].quoteVolume);
+
+    // v3: 1H 캔들 인덱스 (시간순 정렬되어 있음)
+    // ts에 대해 마지막 closed 1H 캔들 찾기
+    function find1hIndex(ts) {
+      // 이진 탐색
+      let lo = 0, hi = klines1h.length - 1, best = -1;
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1;
+        if (klines1h[mid].closeTime <= ts) {
+          best = mid;
+          lo = mid + 1;
+        } else hi = mid - 1;
+      }
+      return best;
+    }
+
+    // 시뮬레이션
+    const trades = [];
+    let lastSignalTs = 0;
+
+    for (let i = win24h; i < klines.length - 1; i++) {
+      const c = klines[i];
+      const ts = c.closeTime;
+
+      if (ts - lastSignalTs < CONFIG.cooldownMs) continue;
+      if (isInSettlementWindow(ts)) continue;
+
+      // 펀딩 (가장 최근 정산값)
+      const fEntry = getValueAt(funding, ts, 9 * 60 * 60 * 1000);
+      if (!fEntry) continue;
+      const fundingRate = fEntry.rate;
+      if (Math.abs(fundingRate) <= CONFIG.fundingAbsThreshold) continue;
+
+      // 24h 거래량
+      const v24 = cumVol[i+1] - cumVol[i+1-win24h];
+      if (v24 <= CONFIG.volume24hMin) continue;
+
+      // 24h 가격 변화
+      const priceAgo = klines[i+1-win24h].close;
+      const priceChange = (c.close - priceAgo) / priceAgo;
+      if (Math.abs(priceChange) >= CONFIG.priceChange24hMaxAbs) continue;
+
+      const direction = fundingRate < 0 ? 'long' : 'short';
+
+      // OI 1h 성장
+      const oiNow = getValueAt(oiHist, ts, 30 * 60 * 1000);
+      const oiAgo = getValueAt(oiHist, ts - 60*60*1000, 30 * 60 * 1000);
+      if (!oiNow || !oiAgo || oiAgo.oi === 0) continue;
+      const oiGrowth = (oiNow.oi - oiAgo.oi) / oiAgo.oi;
+
+      // OI 4h 성장 (점수용, 데이터 없으면 null)
+      const oiAgo4h = getValueAt(oiHist, ts - 4*60*60*1000, 60 * 60 * 1000);
+      const oiGrowth4h = (oiAgo4h && oiAgo4h.oi > 0) ? (oiNow.oi - oiAgo4h.oi) / oiAgo4h.oi : null;
+
+      // v3.5: OI 5분 가속도
+      const oiAgo5m = getValueAt(oiHist, ts - 5*60*1000, 5*60*1000);
+      const oiGrowth5m = (oiAgo5m && oiAgo5m.oi > 0) ? (oiNow.oi - oiAgo5m.oi) / oiAgo5m.oi : null;
+      let oi5m = { class: 'unknown', label: '데이터부족', value: null };
+      if (oiGrowth5m !== null) {
+        if (oiGrowth5m >= CONFIG.oi5mSurgeThreshold) {
+          oi5m = { class: 'surge', label: `급증 +${(oiGrowth5m*100).toFixed(1)}%`, value: oiGrowth5m };
+        } else if (oiGrowth5m <= CONFIG.oi5mDropThreshold) {
+          oi5m = { class: 'drop', label: `급감 ${(oiGrowth5m*100).toFixed(1)}%`, value: oiGrowth5m };
+        } else {
+          oi5m = { class: 'normal', label: `${(oiGrowth5m*100).toFixed(1)}%`, value: oiGrowth5m };
+        }
+      }
+
+      // v3.5: 5분 가격 변화 (현재 5분봉 기준)
+      const priceMove5m = c.open > 0 ? (c.close - c.open) / c.open : null;
+
+      // v3.2: OI 궤적 분류 (이 시점 기준)
+      const oiTraj = (() => {
+        const cutoff24h = ts - 24*60*60*1000;
+        const recent = oiHist.filter(h => h.ts >= cutoff24h && h.ts <= ts);
+        if (recent.length < 12) return { class: 'unknown', label: '데이터부족', peakRatio: null };
+        const maxItem = recent.reduce((a, b) => b.oi > a.oi ? b : a, recent[0]);
+        const minItem = recent.reduce((a, b) => b.oi < a.oi ? b : a, recent[0]);
+        const maxOI = maxItem.oi;
+        const minOI = minItem.oi;
+        const peakRatio = maxOI > 0 ? oiNow.oi / maxOI : null;
+        const peakAgeMs = ts - maxItem.ts;
+
+        const oi0 = oiNow.oi;
+        const oi15 = getValueAt(oiHist, ts - 15*60*1000, 7*60*1000);
+        const oi30 = getValueAt(oiHist, ts - 30*60*1000, 7*60*1000);
+        const oi45 = getValueAt(oiHist, ts - 45*60*1000, 7*60*1000);
+        const recentRate = (oi15 && oi15.oi > 0) ? (oi0 - oi15.oi) / oi15.oi : null;
+        const priorRate = (oi30 && oi15 && oi30.oi > 0) ? (oi15.oi - oi30.oi) / oi30.oi : null;
+
+        if (peakRatio !== null && peakRatio >= CONFIG.oiPeakThreshold && peakAgeMs >= 15*60*1000) {
+          return { class: 'peak', label: '정점', peakRatio };
+        }
+        if (oiGrowth < -0.05) {
+          return { class: 'peak', label: '청산중', peakRatio };
+        }
+        if (peakRatio !== null && peakRatio < 0.70 && minOI > 0 && (oiNow.oi / minOI - 1) > 0.15) {
+          return { class: 'recovery', label: '회복', peakRatio };
+        }
+        if (recentRate !== null && priorRate !== null &&
+            oiGrowth > 0 && priorRate > 0.005 &&
+            recentRate < priorRate * 0.5 && recentRate < 0.003) {
+          return { class: 'slowing', label: '둔화', peakRatio };
+        }
+        if (oiGrowth > CONFIG.oiGrowthThreshold * 0.5) {
+          return { class: 'healthy', label: '건강누적', peakRatio };
+        }
+        return { class: 'sideways', label: '횡보', peakRatio };
+      })();
+
+      // 정점 하드 차단
+      if (CONFIG.oiTrajectoryEnabled && CONFIG.oiPeakHardBlock && oiTraj.class === 'peak') continue;
+
+      // v3.2: LSR 분류 (이 시점 기준)
+      const lsr = (() => {
+        if (!lsrHist || lsrHist.length < 4) return { class: 'unknown', label: '데이터부족' };
+        const cur = getValueAt(lsrHist, ts, 30*60*1000);
+        const earlier = getValueAt(lsrHist, ts - 60*60*1000, 30*60*1000);
+        if (!cur || !earlier) return { class: 'unknown', label: '데이터부족' };
+        const longChange = cur.longRatio - earlier.longRatio;
+        const shortChange = cur.shortRatio - earlier.shortRatio;
+        const dirInner = direction;
+        if (dirInner === 'long') {
+          if (shortChange > 0.02 && cur.shortRatio > cur.longRatio) return { class: 'trap', label: '큰손숏(함정)' };
+          if (longChange > 0.02 && cur.longRatio > cur.shortRatio) return { class: 'confirm', label: '큰손롱(확증)' };
+          if (cur.longRatio > cur.shortRatio) return { class: 'aligned', label: '큰손롱' };
+          return { class: 'opposite', label: '큰손숏' };
+        } else {
+          if (longChange > 0.02 && cur.longRatio > cur.shortRatio) return { class: 'trap', label: '큰손롱(함정)' };
+          if (shortChange > 0.02 && cur.shortRatio > cur.longRatio) return { class: 'confirm', label: '큰손숏(확증)' };
+          if (cur.shortRatio > cur.longRatio) return { class: 'aligned', label: '큰손숏' };
+          return { class: 'opposite', label: '큰손롱' };
+        }
+      })();
+
+      // 펀딩 z-score (직전 21개 정산)
+      const pastFunding = funding.filter(f => f.ts < ts).slice(-21);
+      let fundingZ = null;
+      if (pastFunding.length >= 8) {
+        const earlier = pastFunding.slice(0, -1).map(f => f.rate);
+        const mean = earlier.reduce((a,b)=>a+b,0) / earlier.length;
+        const variance = earlier.reduce((a,b)=>a+(b-mean)**2,0) / earlier.length;
+        const std = Math.sqrt(variance);
+        if (std > 0) fundingZ = (pastFunding[pastFunding.length-1].rate - mean) / std;
+      }
+
+      const oiPass = oiGrowth > CONFIG.oiGrowthThreshold;
+      const zPass = fundingZ !== null && Math.abs(fundingZ) > CONFIG.fundingZThreshold;
+      if (!oiPass && !zPass) continue;
+
+      // Layer 3: 테이커 비율 (현재 5분봉)
+      if (c.quoteVolume === 0) continue;
+      const buyRatio = c.takerBuyQuoteVol / c.quoteVolume;
+      const ratio = direction === 'long' ? buyRatio : (1 - buyRatio);
+      if (ratio < CONFIG.takerRatioThreshold) continue;
+
+      // 거래량 스파이크 (24h 평균 대비)
+      const avgVol = v24 / win24h;
+      if (avgVol === 0) continue;
+      const volSpike = c.quoteVolume / avgVol;
+      if (volSpike < CONFIG.volumeSpikeRatio) continue;
+
+      // v3: 1H 추세 + ADX
+      const idx1h = find1hIndex(ts);
+      let trendAligned = null, adx = null, trendDir = null;
+      if (idx1h >= 50) {
+        const closes1h = klines1h.slice(0, idx1h + 1).map(k => k.close);
+        const ema50 = calcEMA(closes1h, 50);
+        if (ema50 !== null) {
+          const last1h = closes1h[closes1h.length - 1];
+          trendDir = last1h > ema50 ? 'up' : 'down';
+          trendAligned = (direction === 'long') ? (trendDir === 'up') : (trendDir === 'down');
+        }
+        // ADX는 최근 60개 1H 캔들로 계산
+        const recentForAdx = klines1h.slice(Math.max(0, idx1h - 59), idx1h + 1);
+        adx = calcADX(recentForAdx, 14);
+      }
+
+      // 강추세 역행 하드 차단
+      if (CONFIG.regimeFilterEnabled && adx !== null &&
+          adx >= CONFIG.adxStrongThreshold && trendAligned === false) continue;
+
+      // v3: 공간 거리 (4시간 = 48 * 5m)
+      let spaceMul = null;
+      if (i >= 48) {
+        const recent48 = klines.slice(i - 47, i + 1);
+        if (direction === 'long') {
+          const high = Math.max(...recent48.map(k => k.high));
+          const target = high > c.close ? (high - c.close) / c.close : 0;
+          spaceMul = target / CONFIG.defaultTpForSpaceCheck;
+        } else {
+          const low = Math.min(...recent48.map(k => k.low));
+          const target = low < c.close ? (c.close - low) / c.close : 0;
+          spaceMul = target / CONFIG.defaultTpForSpaceCheck;
+        }
+      }
+
+      // v3.4/3.5: 백테스트에서는 CVD/청산은 5분봉 단위로만 사용 (실시간 데이터 없음)
+      // 5분봉의 takerBuyQuoteVol로 단순 CVD 추정 가능
+      const buyVolFrac = c.quoteVolume > 0 ? c.takerBuyQuoteVol / c.quoteVolume : 0.5;
+      // 단순화: 백테스트에선 CVD/청산은 disabled로
+      const cvd = { class: 'unknown' };
+      const liquidation = { class: 'disabled' };
+
+      // 점수
+      const score = computeScore({
+        funding: fundingRate, oiGrowth, oiGrowth4h,
+        takerRatio: ratio, volSpike, fundingZ,
+        trendAligned, adx, trendDir,
+        spaceMultiple: spaceMul, direction,
+        oiTrajectory: oiTraj, lsr,
+        cvd, liquidation,
+        oi5m, priceMove: priceMove5m,
+      });
+      if (score.total < CONFIG.minSignalScore) continue;
+      if (score.total < minScore) continue;
+
+      // 진입
+      const entry = c.close;
+      const tp = direction === 'long' ? entry * (1 + tpPct) : entry * (1 - tpPct);
+      const sl = direction === 'long' ? entry * (1 - slPct) : entry * (1 + slPct);
+      const exitDeadline = ts + timeStop;
+
+      let exit = null, exitReason = '', exitTs = 0;
+      for (let j = i + 1; j < klines.length; j++) {
+        const cc = klines[j];
+        if (cc.openTime > exitDeadline) {
+          exit = cc.open;
+          exitReason = 'TIME';
+          exitTs = cc.openTime;
+          break;
+        }
+        if (direction === 'long') {
+          if (cc.high >= tp) { exit = tp; exitReason = 'TP'; exitTs = cc.openTime; break; }
+          if (cc.low <= sl) { exit = sl; exitReason = 'SL'; exitTs = cc.openTime; break; }
+        } else {
+          if (cc.low <= tp) { exit = tp; exitReason = 'TP'; exitTs = cc.openTime; break; }
+          if (cc.high >= sl) { exit = sl; exitReason = 'SL'; exitTs = cc.openTime; break; }
+        }
+      }
+      if (exit === null) continue;
+
+      const grossPnlPct = direction === 'long'
+        ? (exit - entry) / entry
+        : (entry - exit) / entry;
+      const netPnlPct = grossPnlPct - feeRoundTrip;
+
+      trades.push({
+        ts, direction, entry, exit, grossPnlPct, netPnlPct, exitReason,
+        duration: (exitTs - ts) / 60000,
+        funding: fundingRate, oiGrowth, oiGrowth4h, takerRatio: ratio, volSpike, fundingZ,
+        score: score.total,
+        trendAligned, adx, spaceMul,
+        oiTrajClass: oiTraj.class, oiTrajLabel: oiTraj.label,
+        lsrClass: lsr.class, lsrLabel: lsr.label,
+        oi5mClass: oi5m.class, oi5mValue: oi5m.value,
+      });
+      lastSignalTs = ts;
+    }
+
+    bt.trades = trades;
+    btProgress(`완료: 트레이드 ${trades.length}개`, 100);
+    log('info', `BT 완료: ${symbol}, 트레이드 ${trades.length}개`);
+
+    setTimeout(() => btProgress('대기', 0), 2000);
+    renderBacktestResults();
+  } catch (e) {
+    btProgress(`오류: ${e.message}`, 0);
+    log('error', `BT 실패: ${e.message}`);
+  } finally {
+    bt.running = false;
+    document.getElementById('bt-run').disabled = false;
+  }
+}
+
+function renderBacktestResults() {
+  if (bt.trades.length === 0) {
+    document.getElementById('bt-results-panel').style.display = 'block';
+    document.getElementById('bt-stats').innerHTML = '<div class="empty">트레이드 0개. 임계값을 낮춰보세요.</div>';
+    document.getElementById('bt-buckets-panel').style.display = 'none';
+    document.getElementById('bt-equity-panel').style.display = 'none';
+    document.getElementById('bt-trades-panel').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('bt-results-panel').style.display = 'block';
+  document.getElementById('bt-buckets-panel').style.display = 'block';
+  document.getElementById('bt-equity-panel').style.display = 'block';
+  document.getElementById('bt-trades-panel').style.display = 'block';
+
+  // ---- 통계 ----
+  const t = bt.trades;
+  const wins = t.filter(x => x.netPnlPct > 0);
+  const losses = t.filter(x => x.netPnlPct <= 0);
+  const winRate = wins.length / t.length;
+  const avgWin = wins.reduce((a,x)=>a+x.netPnlPct,0) / Math.max(1,wins.length);
+  const avgLoss = losses.reduce((a,x)=>a+x.netPnlPct,0) / Math.max(1,losses.length);
+  const sumWins = wins.reduce((a,x)=>a+x.netPnlPct,0);
+  const sumLosses = Math.abs(losses.reduce((a,x)=>a+x.netPnlPct,0));
+  const profitFactor = sumLosses > 0 ? sumWins / sumLosses : (sumWins > 0 ? Infinity : 0);
+  const totalReturn = t.reduce((a,x)=>a+x.netPnlPct,0);
+  const expectancy = totalReturn / t.length;
+  const avgDur = t.reduce((a,x)=>a+x.duration,0) / t.length;
+
+  // 누적 곡선 + 최대 낙폭
+  let equity = 0, peak = 0, maxDD = 0;
+  const equityCurve = [];
+  for (const tr of t) {
+    equity += tr.netPnlPct;
+    if (equity > peak) peak = equity;
+    const dd = peak - equity;
+    if (dd > maxDD) maxDD = dd;
+    equityCurve.push({ ts: tr.ts, equity, isWin: tr.netPnlPct > 0 });
+  }
+
+  // 사유별 카운트
+  const tpCount = t.filter(x => x.exitReason === 'TP').length;
+  const slCount = t.filter(x => x.exitReason === 'SL').length;
+  const timeCount = t.filter(x => x.exitReason === 'TIME').length;
+
+  document.getElementById('bt-summary-meta').textContent =
+    `${bt.symbol} · ${new Date(t[0].ts).toLocaleDateString('ko-KR')} ~ ${new Date(t[t.length-1].ts).toLocaleDateString('ko-KR')}`;
+
+  const wrColor = winRate >= 0.55 ? 'v-pos' : winRate >= 0.5 ? 'v-mute' : 'v-neg';
+  const expColor = expectancy > 0 ? 'v-pos' : 'v-neg';
+  const totalColor = totalReturn > 0 ? 'v-pos' : 'v-neg';
+  const pfColor = profitFactor >= 1.3 ? 'v-pos' : profitFactor >= 1.0 ? 'v-mute' : 'v-neg';
+
+  document.getElementById('bt-stats').innerHTML = `
+    <div class="stat">
+      <div class="stat-label">총 트레이드</div>
+      <div class="stat-value">${t.length}</div>
+      <div class="stat-sub">TP ${tpCount} · SL ${slCount} · TIME ${timeCount}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">승률</div>
+      <div class="stat-value ${wrColor}">${(winRate*100).toFixed(1)}%</div>
+      <div class="stat-sub">${wins.length} 승 / ${losses.length} 패</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">기대값/트레이드</div>
+      <div class="stat-value ${expColor}">${(expectancy*100).toFixed(2)}%</div>
+      <div class="stat-sub">수수료 차감 후</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">누적 수익</div>
+      <div class="stat-value ${totalColor}">${(totalReturn*100).toFixed(1)}%</div>
+      <div class="stat-sub">단순 합산 (복리X)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Profit Factor</div>
+      <div class="stat-value ${pfColor}">${isFinite(profitFactor) ? profitFactor.toFixed(2) : '∞'}</div>
+      <div class="stat-sub">총익 / 총손</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">최대 낙폭 (MDD)</div>
+      <div class="stat-value v-neg">${(maxDD*100).toFixed(1)}%</div>
+      <div class="stat-sub">peak-to-trough</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">평균 익절</div>
+      <div class="stat-value v-pos">+${(avgWin*100).toFixed(2)}%</div>
+      <div class="stat-sub">윈 트레이드</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">평균 손절</div>
+      <div class="stat-value v-neg">${(avgLoss*100).toFixed(2)}%</div>
+      <div class="stat-sub">루즈 트레이드</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">평균 보유시간</div>
+      <div class="stat-value">${avgDur.toFixed(0)}분</div>
+      <div class="stat-sub">진입~청산</div>
+    </div>
+  `;
+
+  // ---- 점수 구간별 ----
+  const bucketDefs = [
+    { label: '50-60', min: 50, max: 60 },
+    { label: '60-70', min: 60, max: 70 },
+    { label: '70-80', min: 70, max: 80 },
+    { label: '80-90', min: 80, max: 90 },
+    { label: '90+',   min: 90, max: 200 },
+  ];
+  const buckets = bucketDefs.map(b => {
+    const tr = t.filter(x => x.score >= b.min && x.score < b.max);
+    const w = tr.filter(x => x.netPnlPct > 0).length;
+    const wr = tr.length > 0 ? w / tr.length : null;
+    const exp = tr.length > 0 ? tr.reduce((a,x)=>a+x.netPnlPct,0) / tr.length : 0;
+    return { ...b, count: tr.length, wr, exp };
+  });
+  document.getElementById('bt-buckets').innerHTML = buckets.map(b => {
+    const wrText = b.wr === null ? '—' : `${(b.wr*100).toFixed(0)}%`;
+    const wrClass = b.wr === null ? 'v-mute' : (b.wr >= 0.55 ? 'v-pos' : b.wr >= 0.5 ? 'v-mute' : 'v-neg');
+    const expText = b.count === 0 ? '' : `EV: ${(b.exp*100).toFixed(2)}%`;
+    return `<div class="bucket">
+      <div class="bucket-label">${b.label}점</div>
+      <div class="bucket-rate ${wrClass}">${wrText}</div>
+      <div class="bucket-count">${b.count}개 · ${expText}</div>
+    </div>`;
+  }).join('');
+
+  // ---- OI 궤적별 분석 ----
+  const oiTrajClasses = [
+    { class: 'healthy', label: '건강누적' },
+    { class: 'sideways', label: '횡보' },
+    { class: 'slowing', label: '둔화' },
+    { class: 'recovery', label: '회복' },
+    { class: 'peak', label: '정점' },
+    { class: 'unknown', label: '데이터부족' },
+  ];
+  const oiTrajGroups = oiTrajClasses.map(g => {
+    const tr = t.filter(x => x.oiTrajClass === g.class);
+    const w = tr.filter(x => x.netPnlPct > 0).length;
+    const wr = tr.length > 0 ? w / tr.length : null;
+    const exp = tr.length > 0 ? tr.reduce((a,x)=>a+x.netPnlPct,0) / tr.length : 0;
+    return { ...g, count: tr.length, wr, exp };
+  }).filter(g => g.count > 0);
+
+  document.getElementById('bt-oitraj-panel').style.display = oiTrajGroups.length > 0 ? 'block' : 'none';
+  document.getElementById('bt-oitraj').innerHTML = oiTrajGroups.map(g => {
+    const wrText = `${(g.wr*100).toFixed(0)}%`;
+    const wrClass = g.wr >= 0.55 ? 'v-pos' : g.wr >= 0.5 ? 'v-mute' : 'v-neg';
+    return `<div class="bucket">
+      <div class="bucket-label">${g.label}</div>
+      <div class="bucket-rate ${wrClass}">${wrText}</div>
+      <div class="bucket-count">${g.count}개 · EV: ${(g.exp*100).toFixed(2)}%</div>
+    </div>`;
+  }).join('');
+
+  // ---- LSR별 분석 ----
+  const lsrClasses = [
+    { class: 'confirm', label: '확증' },
+    { class: 'aligned', label: '일치' },
+    { class: 'neutral', label: '중립' },
+    { class: 'opposite', label: '반대' },
+    { class: 'trap', label: '함정' },
+    { class: 'unknown', label: '데이터부족' },
+  ];
+  const lsrGroups = lsrClasses.map(g => {
+    const tr = t.filter(x => x.lsrClass === g.class);
+    const w = tr.filter(x => x.netPnlPct > 0).length;
+    const wr = tr.length > 0 ? w / tr.length : null;
+    const exp = tr.length > 0 ? tr.reduce((a,x)=>a+x.netPnlPct,0) / tr.length : 0;
+    return { ...g, count: tr.length, wr, exp };
+  }).filter(g => g.count > 0);
+
+  document.getElementById('bt-lsr-panel').style.display = lsrGroups.length > 0 ? 'block' : 'none';
+  document.getElementById('bt-lsr').innerHTML = lsrGroups.map(g => {
+    const wrText = `${(g.wr*100).toFixed(0)}%`;
+    const wrClass = g.wr >= 0.55 ? 'v-pos' : g.wr >= 0.5 ? 'v-mute' : 'v-neg';
+    return `<div class="bucket">
+      <div class="bucket-label">${g.label}</div>
+      <div class="bucket-rate ${wrClass}">${wrText}</div>
+      <div class="bucket-count">${g.count}개 · EV: ${(g.exp*100).toFixed(2)}%</div>
+    </div>`;
+  }).join('');
+
+  // ---- 누적 곡선 ----
+  drawEquityCurve(equityCurve);
+
+  // ---- 트레이드 리스트 ----
+  document.getElementById('bt-trades-meta').textContent = `${t.length}개`;
+  const sorted = [...t].sort((a,b) => b.ts - a.ts);
+  document.getElementById('bt-trades-body').innerHTML = sorted.map(tr => {
+    const time = new Date(tr.ts).toISOString().slice(0,16).replace('T',' ');
+    const dirBadge = tr.direction === 'long'
+      ? '<span class="badge badge-long">롱</span>'
+      : '<span class="badge badge-short">숏</span>';
+    const pnlClass = tr.netPnlPct > 0 ? 'v-pos' : 'v-neg';
+    const reasonClass = tr.exitReason === 'TP' ? 'v-pos' : tr.exitReason === 'SL' ? 'v-neg' : 'v-mute';
+    return `<tr>
+      <td class="v-mute">${time}</td>
+      <td>${dirBadge}</td>
+      <td class="center">${scoreBadge(tr.score)}</td>
+      <td class="right v-mute">${tr.entry.toPrecision(5)}</td>
+      <td class="right v-mute">${tr.exit.toPrecision(5)}</td>
+      <td class="right ${pnlClass}">${(tr.netPnlPct*100).toFixed(2)}%</td>
+      <td class="${reasonClass}">${tr.exitReason}</td>
+      <td class="right v-mute">${tr.duration.toFixed(0)}m</td>
+      <td class="right v-mute">${(tr.funding*100).toFixed(3)}%</td>
+    </tr>`;
+  }).join('');
+}
+
+function scoreBadge(score) {
+  let cls = 'score-low';
+  if (score >= 90) cls = 'score-elite';
+  else if (score >= 75) cls = 'score-high';
+  else if (score >= 60) cls = 'score-mid';
+  return `<span class="score ${cls}">${score}</span>`;
+}
+
+function drawEquityCurve(curve) {
+  const canvas = document.getElementById('equity-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.offsetWidth;
+  const h = canvas.offsetHeight;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, w, h);
+
+  if (curve.length === 0) return;
+
+  const padL = 50, padR = 14, padT = 14, padB = 26;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+
+  const startTs = curve[0].ts;
+  const endTs = curve[curve.length-1].ts;
+  const tsRange = Math.max(1, endTs - startTs);
+  const eqs = curve.map(p => p.equity);
+  const minEq = Math.min(0, ...eqs);
+  const maxEq = Math.max(0, ...eqs);
+  const eqRange = (maxEq - minEq) || 0.01;
+
+  const x = ts => padL + ((ts - startTs) / tsRange) * plotW;
+  const y = eq => padT + (1 - (eq - minEq) / eqRange) * plotH;
+
+  // 격자
+  ctx.strokeStyle = '#1a2332';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const yy = padT + (i / 4) * plotH;
+    ctx.beginPath();
+    ctx.moveTo(padL, yy);
+    ctx.lineTo(padL + plotW, yy);
+    ctx.stroke();
+    const eqVal = maxEq - (i/4) * eqRange;
+    ctx.fillStyle = '#424d5d';
+    ctx.font = '10px ui-monospace, monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${(eqVal*100).toFixed(1)}%`, padL - 6, yy + 3);
+  }
+
+  // Zero line
+  if (minEq < 0 && maxEq > 0) {
+    const yZero = y(0);
+    ctx.strokeStyle = '#243042';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(padL, yZero);
+    ctx.lineTo(padL + plotW, yZero);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // Equity line
+  ctx.strokeStyle = '#facc15';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  curve.forEach((p, i) => {
+    const xx = x(p.ts), yy = y(p.equity);
+    if (i === 0) ctx.moveTo(xx, yy);
+    else ctx.lineTo(xx, yy);
+  });
+  ctx.stroke();
+
+  // Trade markers
+  curve.forEach(p => {
+    ctx.fillStyle = p.isWin ? 'rgba(74,222,128,0.5)' : 'rgba(248,113,113,0.5)';
+    ctx.beginPath();
+    ctx.arc(x(p.ts), y(p.equity), 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // X-axis labels
+  ctx.fillStyle = '#424d5d';
+  ctx.font = '10px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText(new Date(startTs).toLocaleDateString('ko-KR'), padL, h - 8);
+  ctx.textAlign = 'right';
+  ctx.fillText(new Date(endTs).toLocaleDateString('ko-KR'), padL + plotW, h - 8);
+}
+
+// ============================================================================
+// UI 공통
+// ============================================================================
+function setStatus(type, color, text) {
+  const dot = document.getElementById(`${type}-dot`);
+  const status = document.getElementById(`${type}-status`);
+  if (dot) dot.className = `dot ${color || ''}`.trim();
+  if (status) status.textContent = text;
+}
+
+// v3.4: Rate Limit 표시
+function renderRateLimit() {
+  const dot = document.getElementById('rate-dot');
+  const text = document.getElementById('rate-text');
+  if (!text) return;
+  const w = state.rateLimit.weight;
+  const limit = state.rateLimit.weightLimit;
+  if (w === 0 || !state.rateLimit.weightUpdated) {
+    text.textContent = '⚡ 측정중';
+    if (dot) dot.className = 'dot';
+    return;
+  }
+  const pct = (w / limit) * 100;
+  let color = 'green';
+  if (pct >= CONFIG.rateLimitPausePercent) color = 'red';
+  else if (pct >= CONFIG.rateLimitSlowPercent) color = 'red';
+  else if (pct >= CONFIG.rateLimitWarnPercent) color = 'amber';
+  if (dot) dot.className = `dot ${color}`;
+  text.textContent = `⚡ ${w}/${limit} (${pct.toFixed(0)}%)`;
+}
+
+function log(type, msg) {
+  state.log.unshift({ ts: Date.now(), type, msg, time: new Date().toLocaleTimeString('ko-KR') });
+  if (state.log.length > 200) state.log.pop();
+  renderLog();
+}
+
+function clearLog() { state.log = []; renderLog(); }
+
+function fmtMoney(n) {
+  if (!n || isNaN(n)) return '—';
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(0);
+}
+
+function renderGunpowder() {
+  const tbody = document.getElementById('gunpowder-body');
+  if (!tbody) return;
+
+  const list = [...state.gunpowder.entries()].map(([sym, d]) => {
+    const taker = getTakerRatio(sym);
+    const volSpike = getVolumeSpike(sym);
+    const ratio = taker ? (d.direction === 'long' ? taker.buyRatio : taker.sellRatio) : null;
+    const trend = getTrendInfo(sym, d.direction);
+    const spaceMul = getSpaceMultiple(sym, d.direction, d.lastPrice);
+    const oiGrowth4hLive = getOIGrowth4h(sym);
+    const oiTraj = classifyOITrajectory(sym);
+    const lsr = classifyLSR(sym, d.direction);
+    const kstDailyChange = getKstDailyChange(sym, d.lastPrice);
+    const cvd = CONFIG.cvdEnabled ? getCVDInfo(sym, d.direction) : { class: 'unknown', label: '비활성' };
+    const liquidation = getLiquidationInfo(sym, d.direction);
+    const oi5m = classifyOI5m(sym, d.direction);
+    const priceMove5m = getPriceMove5m(sym, d.lastPrice);
+    const score = computeScore({
+      funding: d.funding, oiGrowth: d.oiGrowth, oiGrowth4h: oiGrowth4hLive,
+      takerRatio: ratio, volSpike, fundingZ: d.fundingZ,
+      trendAligned: trend.aligned, adx: trend.adx, trendDir: trend.trendDir,
+      spaceMultiple: spaceMul, direction: d.direction,
+      oiTrajectory: oiTraj, lsr, cvd, liquidation,
+      oi5m, priceMove: priceMove5m,
+    });
+    return { symbol: sym, ...d, oiGrowth4hLive, taker, volSpike, score, trend, spaceMul, oiTraj, lsr, kstDailyChange, cvd, liquidation, oi5m, priceMove5m };
+  });
+  list.sort((a, b) => b.score.total - a.score.total);
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="16" class="empty">조건 충족 종목 없음 (대기 중)</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(item => {
+    const dirBadge = item.direction === 'long'
+      ? '<span class="badge badge-long">롱 진입</span>'
+      : '<span class="badge badge-short">숏 진입</span>';
+
+    let takerCell = '<span class="v-mute">수집중</span>';
+    if (item.taker) {
+      const r = item.direction === 'long' ? item.taker.buyRatio : item.taker.sellRatio;
+      const cls = r >= CONFIG.takerRatioThreshold ? 'v-strong' : 'v-mute';
+      const buyW = (item.taker.buyRatio * 100).toFixed(0);
+      const sellW = (item.taker.sellRatio * 100).toFixed(0);
+      takerCell = `<span class="${cls}">${(r*100).toFixed(0)}%</span>` +
+        `<span class="ratio-bar">` +
+        `<span style="width:${buyW}%; background:var(--pos)"></span>` +
+        `<span style="width:${sellW}%; background:var(--neg)"></span>` +
+        `</span>`;
+    }
+
+    let spikeCell = '<span class="v-mute">수집중</span>';
+    if (item.volSpike !== null && !isNaN(item.volSpike)) {
+      const cls = item.volSpike >= CONFIG.volumeSpikeRatio ? 'v-strong' : 'v-mute';
+      spikeCell = `<span class="${cls}">${item.volSpike.toFixed(1)}x</span>`;
+    }
+
+    // v3 컬럼들
+    let trendCell = '<span class="v-dim">—</span>';
+    if (item.trend.aligned !== null) {
+      if (item.trend.aligned) trendCell = '<span class="v-pos">정렬</span>';
+      else trendCell = '<span class="v-neg">역행</span>';
+    }
+
+    let regimeCell = '<span class="v-dim">—</span>';
+    if (item.trend.adx !== null) {
+      const adx = item.trend.adx;
+      if (adx >= CONFIG.adxStrongThreshold) regimeCell = `<span class="v-neg">강추세 ${adx.toFixed(0)}</span>`;
+      else if (adx >= CONFIG.adxModerateThreshold) regimeCell = `<span class="v-mute">약추세 ${adx.toFixed(0)}</span>`;
+      else regimeCell = `<span class="v-pos">횡보 ${adx.toFixed(0)}</span>`;
+    }
+
+    let spaceCell = '<span class="v-dim">—</span>';
+    if (item.spaceMul !== null && !isNaN(item.spaceMul)) {
+      const cls = item.spaceMul >= CONFIG.spaceMinMultiple ? 'v-pos' : 'v-neg';
+      spaceCell = `<span class="${cls}">${item.spaceMul.toFixed(1)}x</span>`;
+    }
+
+    const fundingClass = item.funding < 0 ? 'v-pos' : 'v-neg';
+    const oiCellHtml = (() => {
+      const fmt = (v) => {
+        if (v === null || v === undefined) return '<span class="v-dim">—</span>';
+        const cls = v > 0 ? 'v-pos' : 'v-neg';
+        const sign = v > 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${(v*100).toFixed(0)}%</span>`;
+      };
+      return `${fmt(item.oiGrowth)} <span class="v-dim">/</span> ${fmt(item.oiGrowth4hLive)}`;
+    })();
+
+    // OI 궤적 셀
+    let oiTrajCell = '<span class="v-dim">—</span>';
+    if (item.oiTraj && item.oiTraj.class !== 'unknown') {
+      const cls = {
+        'healthy': 'v-pos',
+        'sideways': 'v-mute',
+        'slowing': 'v-neg',
+        'recovery': 'v-neg',
+        'peak': 'v-neg',
+      }[item.oiTraj.class] || 'v-mute';
+      const peakStr = item.oiTraj.peakRatio !== null
+        ? ` <span class="v-dim">(${(item.oiTraj.peakRatio*100).toFixed(0)}%)</span>` : '';
+      oiTrajCell = `<span class="${cls}">${item.oiTraj.label}</span>${peakStr}`;
+    }
+
+    // LSR (큰손) 셀
+    let lsrCell = '<span class="v-dim">—</span>';
+    if (item.lsr && item.lsr.class !== 'unknown') {
+      const cls = {
+        'confirm': 'v-pos',
+        'aligned': 'v-pos',
+        'neutral': 'v-mute',
+        'opposite': 'v-mute',
+        'trap': 'v-neg',
+      }[item.lsr.class] || 'v-mute';
+      lsrCell = `<span class="${cls}">${item.lsr.label}</span>`;
+    }
+
+    // v3.4: CVD 셀
+    let cvdCell = '<span class="v-dim">—</span>';
+    if (item.cvd && item.cvd.class !== 'unknown') {
+      const cls = {
+        'confirm': 'v-pos',
+        'divergence': 'v-pos',
+        'aligned': 'v-mute',
+        'neutral': 'v-mute',
+        'weak': 'v-neg',
+      }[item.cvd.class] || 'v-mute';
+      cvdCell = `<span class="${cls}">${item.cvd.label}</span>`;
+    }
+
+    // v3.4: 청산 셀
+    let liqCell = '<span class="v-dim">—</span>';
+    if (item.liquidation && item.liquidation.class !== 'none' && item.liquidation.class !== 'disabled') {
+      const cls = {
+        'cascade': 'v-strong',
+        'opposite': 'v-neg',
+        'minor': 'v-mute',
+      }[item.liquidation.class] || 'v-mute';
+      liqCell = `<span class="${cls}">${item.liquidation.label}</span>`;
+    }
+
+    // v3.5: OI 5분 셀
+    let oi5mCell = '<span class="v-dim">—</span>';
+    if (item.oi5m && item.oi5m.class !== 'unknown' && item.oi5m.class !== 'disabled') {
+      let cls = 'v-mute';
+      if (item.oi5m.class === 'surge') cls = 'v-strong';
+      else if (item.oi5m.class === 'drop') {
+        // priceMove와 결합: aligned면 초록, 아니면 빨강
+        const aligned = item.priceMove5m !== null && (
+          (item.direction === 'long' && item.priceMove5m > 0) ||
+          (item.direction === 'short' && item.priceMove5m < 0)
+        );
+        cls = aligned ? 'v-pos' : 'v-neg';
+      } else if (item.oi5m.value !== null) {
+        cls = item.oi5m.value >= 0 ? 'v-pos' : 'v-neg';
+      }
+      oi5mCell = `<span class="${cls}">${item.oi5m.label}</span>`;
+    }
+
+    return `<tr>
+      <td class="symbol-cell">${item.symbol.replace('USDT','')}</td>
+      <td>${dirBadge}</td>
+      <td class="center">${scoreBadge(item.score.total)}</td>
+      <td class="right">${(() => {
+        if (item.kstDailyChange === null || item.kstDailyChange === undefined) return '<span class="v-dim">—</span>';
+        const cls = item.kstDailyChange >= 0 ? 'v-pos' : 'v-neg';
+        const sign = item.kstDailyChange >= 0 ? '+' : '';
+        return `<span class="${cls}">${sign}${(item.kstDailyChange*100).toFixed(2)}%</span>`;
+      })()}</td>
+      <td class="right">${oi5mCell}</td>
+      <td class="right ${fundingClass}">${(item.funding*100).toFixed(3)}%</td>
+      <td class="right">${oiCellHtml}</td>
+      <td class="center">${oiTrajCell}</td>
+      <td class="center">${lsrCell}</td>
+      <td class="center">${cvdCell}</td>
+      <td class="center">${liqCell}</td>
+      <td class="right">${takerCell}</td>
+      <td class="right">${spikeCell}</td>
+      <td class="center">${trendCell}</td>
+      <td class="center">${regimeCell}</td>
+      <td class="center">${spaceCell}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderSignals() {
+  const tbody = document.getElementById('signals-body');
+  if (!tbody) return;
+  document.getElementById('signals-count').textContent = `${state.signals.length}개`;
+  if (state.signals.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="empty">발화 없음 (대기 중)</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = state.signals.slice(0, 50).map(s => {
+    const dir = s.direction === 'long'
+      ? '<span class="badge badge-long">롱 진입</span>'
+      : '<span class="badge badge-short">숏 진입</span>';
+    const elapsed = Math.floor((Date.now() - s.ts) / 1000);
+    const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed/60)}m`;
+    const time = new Date(s.ts).toLocaleTimeString('ko-KR');
+    const fired = (Date.now() - s.ts) < 60000 ? ' <span class="badge badge-fired">NEW</span>' : '';
+    return `<tr>
+      <td>${time} <span class="v-dim">(${elapsedStr})</span>${fired}</td>
+      <td class="symbol-cell">${s.symbol.replace('USDT','')}</td>
+      <td>${dir}</td>
+      <td class="center">${scoreBadge(s.score.total)}</td>
+      <td class="right v-strong">${(s.funding*100).toFixed(3)}%</td>
+      <td class="right v-strong">${(s.takerRatio*100).toFixed(0)}%</td>
+      <td class="right v-strong">${s.volSpike.toFixed(1)}x</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderLog() {
+  const div = document.getElementById('log');
+  if (!div) return;
+  if (state.log.length === 0) { div.innerHTML = '<div class="empty">로그 비어있음</div>'; return; }
+  div.innerHTML = state.log.slice(0, 80).map(e =>
+    `<div class="log-entry ${e.type}"><span class="log-time">${e.time}</span>${escapeHtml(e.msg)}</div>`
+  ).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+// 탭 전환
+document.querySelectorAll('.tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+document.getElementById('bt-run').addEventListener('click', runBacktest);
+
+// ============================================================================
+// 설정 UI
+// ============================================================================
+function buildSettingsUI() {
+  const grid = document.getElementById('settings-grid');
+  const fields = [
+    { key: 'fundingAbsThreshold', label: '펀딩 임계값', mult: 100, suffix: '%', step: 0.001, min: 0 },
+    { key: 'oiGrowthThreshold', label: 'OI 1h 증가율', mult: 100, suffix: '%', step: 1, min: 0 },
+    { key: 'volume24hMin', label: '24h 거래량 최소', mult: 1, suffix: '$', step: 1000000, min: 0 },
+    { key: 'priceChange24hMaxAbs', label: '24h 변동 한도 (±)', mult: 100, suffix: '%', step: 0.5, min: 0 },
+    { key: 'takerRatioThreshold', label: '테이커 비율', mult: 100, suffix: '%', step: 1, min: 50, max: 95 },
+    { key: 'volumeSpikeRatio', label: '거래량 스파이크', mult: 1, suffix: 'x', step: 0.1, min: 1 },
+    { key: 'fundingZThreshold', label: '펀딩 Z-score', mult: 1, suffix: 'σ', step: 0.1, min: 0 },
+    { key: 'minSignalScore', label: '시그널 최소 점수', mult: 1, suffix: '점', step: 5, min: 0, max: 100 },
+    { key: 'settlementBlockMinutes', label: '정산창 차단 (0=끄기)', mult: 1, suffix: '분', step: 1, min: 0, max: 30 },
+    { key: 'trendPenalty', label: '[D] 추세역행 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 50 },
+    { key: 'adxStrongThreshold', label: '[F] 강추세 ADX', mult: 1, suffix: '', step: 1, min: 20, max: 60 },
+    { key: 'adxModerateThreshold', label: '[F] 약추세 ADX', mult: 1, suffix: '', step: 1, min: 15, max: 40 },
+    { key: 'regimePenalty', label: '[F] 추세장 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'spaceMinMultiple', label: "[E'] 최소 공간 (TP×)", mult: 1, suffix: 'x', step: 0.1, min: 0.5, max: 5 },
+    { key: 'spacePenalty', label: "[E'] 공간부족 페널티", mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'oiPeakThreshold', label: '[OI] 정점 임계 (24h고점%)', mult: 100, suffix: '%', step: 1, min: 80, max: 100 },
+    { key: 'oiTrajectoryPeakPenalty', label: '[OI] 정점 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'oiTrajectorySlowPenalty', label: '[OI] 둔화 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'oiTrajectoryRecoveryPenalty', label: '[OI] 회복 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'lsrTrapPenalty', label: '[LSR] 큰손함정 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'lsrConfirmBonus', label: '[LSR] 큰손확증 보너스', mult: 1, suffix: '점', step: 1, min: 0, max: 20 },
+    { key: 'cvdConfirmBonus', label: '[CVD] 확증 보너스', mult: 1, suffix: '점', step: 1, min: 0, max: 20 },
+    { key: 'cvdDivPenalty', label: '[CVD] 약함 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+    { key: 'liquidationCascadeBonus', label: '[청산] 캐스케이드 보너스', mult: 1, suffix: '점', step: 1, min: 0, max: 20 },
+    { key: 'liquidationCascadeUSD', label: '[청산] 캐스케이드 임계 ($)', mult: 1, suffix: '$', step: 10000, min: 10000, max: 1000000 },
+    { key: 'oi5mSurgeThreshold', label: '[OI5m] 급증 임계 (%)', mult: 100, suffix: '%', step: 0.5, min: 1, max: 20 },
+    { key: 'oi5mSurgeAlignedBonus', label: '[OI5m] 급증 보너스', mult: 1, suffix: '점', step: 1, min: 0, max: 15 },
+    { key: 'oi5mDropAlignedBonus', label: '[OI5m] 급감(유리) 보너스', mult: 1, suffix: '점', step: 1, min: 0, max: 15 },
+    { key: 'oi5mDropOpposedPenalty', label: '[OI5m] 급감(불리) 페널티', mult: 1, suffix: '점', step: 1, min: 0, max: 30 },
+  ];
+  grid.innerHTML = fields.map(f => {
+    const value = (CONFIG[f.key] * f.mult);
+    return `<div class="setting">
+      <label>${f.label.toUpperCase()} (${f.suffix})</label>
+      <input type="number" data-key="${f.key}" data-mult="${f.mult}" value="${value}" step="${f.step}"${f.min !== undefined ? ` min="${f.min}"`:''}${f.max ? ` max="${f.max}"`:''}>
+    </div>`;
+  }).join('');
+  grid.addEventListener('change', (e) => {
+    if (e.target.tagName !== 'INPUT') return;
+    const key = e.target.dataset.key;
+    const mult = parseFloat(e.target.dataset.mult);
+    const val = parseFloat(e.target.value) / mult;
+    if (!isNaN(val)) {
+      CONFIG[key] = val;
+      saveConfig();
+      log('info', `설정: ${key} = ${e.target.value}`);
+    }
+  });
+}
+
+// ============================================================================
+// 시작
+// ============================================================================
+async function start() {
+  log('info', 'Funding Squeeze Hunter v2.0 시작');
+  log('info', '※ 첫 시그널: 60~120초 후 (테이커 데이터 누적 필요)');
+  buildSettingsUI();
+
+  try {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => log('info', `알림 권한: ${p}`));
+    }
+  } catch {}
+
+  try {
+    await loadExchangeInfo();
+    connectLiquidationStream();  // v3.4: 청산 스트림 시작
+    await runPollingCycle();
+    setInterval(runPollingCycle, CONFIG.pollIntervalMs);
+    setInterval(runSignalEvaluation, CONFIG.evalIntervalMs);
+  } catch (e) {
+    log('error', `시작 실패: ${e.message}`);
+  }
+}
+
+start();
+</script>
+</body>
+</html>
